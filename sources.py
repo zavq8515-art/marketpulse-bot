@@ -26,7 +26,7 @@ SOURCES = [
     {"name": "CNBC Technology", "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910"},
     {"name": "MarketWatch", "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
     {"name": "MarketWatch Pulse", "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"},
-    {"name": "Yahoo Finance", "url": "https://finance.yahoo.com/rss/topstories"},
+    {"name": "Yahoo Finance", "url": GN + "site:finance.yahoo.com+when:1d"},
     {"name": "Investing.com", "url": "https://www.investing.com/rss/news_25.rss"},
 
     # --- Reuters / AP / Bloomberg / WSJ / FT / Barron's (Google News orqali) ---

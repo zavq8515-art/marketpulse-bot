@@ -11,10 +11,10 @@ log = logging.getLogger("ai")
 API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
-FALLBACK_MODELS = [GEMINI_MODEL, "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.8-flash"]
 
 
-def _call(prompt, temperature=0.4, retries=4):
+def _call(prompt, temperature=0.4, retries=5):
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -28,7 +28,7 @@ def _call(prompt, temperature=0.4, retries=4):
         model = models[min(attempt, len(models) - 1)]
         url = API.format(model=model)
         try:
-            r = requests.post(url, params={"key": GEMINI_API_KEY}, json=body, timeout=90)
+            r = requests.post(url, params={"key": GEMINI_API_KEY}, json=body, timeout=30)
             if r.status_code in (400, 401, 403):
                 log.error("Gemini API kaliti yoki so'rov noto'g'ri: %s", r.text[:300])
                 return None
@@ -87,19 +87,21 @@ def triage(items, recent):
     now = datetime.now(TASHKENT).strftime("%Y-%m-%d %H:%M")
     recent_txt = "\n".join(f"- [{p['topic']}] {p['summary']}" for p in recent) or "(hali post yo'q)"
     selected = []
-    # Juda ko'p xabar bo'lsa 30 tadan bo'laklab yuboramiz
-    for start in range(0, len(items), 30):
-        chunk = items[start : start + 30]
+    # Har bir tekshiruvda eng yangi 40 ta xabarni 20 tadan bo'lib tahlil qilamiz
+    items = sorted(items, key=lambda x: x.get("published") or "", reverse=True)[:40]
+    any_ok = False
+    for start in range(0, len(items), 20):
+        chunk = items[start : start + 20]
         items_txt = "\n".join(
-            f"{start + i}. [{it['source']}{' (RASMIY)' if it['official'] else ''}] {it['title']} — {it['summary'][:200]}"
+            f"{start + i}. [{it['source']}{' (RASMIY)' if it['official'] else ''}] {it['title']} — {it['summary'][:160]}"
             for i, it in enumerate(chunk)
         )
         res = _call(TRIAGE_PROMPT.format(now=now, recent=recent_txt, items=items_txt), temperature=0.1)
-        if res is None:
-            return None  # AI ishlamadi — xabarlar keyingi safar qayta ko'riladi
-        if isinstance(res.get("selected"), list):
-            selected.extend(res["selected"])
-    return selected
+        if res is not None:
+            any_ok = True
+            if isinstance(res.get("selected"), list):
+                selected.extend(res["selected"])
+    return selected if any_ok else None
 
 
 WRITER_PROMPT = """Sen MARKETPULSE — o'zbek tilidagi professional moliyaviy Telegram kanal tahlilchisisan.

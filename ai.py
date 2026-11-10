@@ -11,7 +11,12 @@ log = logging.getLogger("ai")
 API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
-FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.8-flash"]
+FALLBACK_MODELS = [
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite",
+]
 
 
 def _call(prompt, temperature=0.4, retries=5):
@@ -20,21 +25,19 @@ def _call(prompt, temperature=0.4, retries=5):
         "generationConfig": {
             "temperature": temperature,
             "responseMimeType": "application/json",
-            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
     models = list(dict.fromkeys(FALLBACK_MODELS))
     for attempt in range(retries):
-        model = models[min(attempt, len(models) - 1)]
+        model = models[attempt % len(models)]
         url = API.format(model=model)
         try:
-            r = requests.post(url, params={"key": GEMINI_API_KEY}, json=body, timeout=30)
-            if r.status_code in (400, 401, 403):
-                log.error("Gemini API kaliti yoki so'rov noto'g'ri: %s", r.text[:300])
+            r = requests.post(url, params={"key": GEMINI_API_KEY}, json=body, timeout=40)
+            if r.status_code in (401, 403):
+                log.error("Gemini API kaliti yaroqsiz (HTTP %d): %s", r.status_code, r.text[:200])
                 return None
-            if r.status_code in (404, 429) or r.status_code >= 500:
+            if r.status_code != 200:
                 raise RuntimeError(f"HTTP {r.status_code} ({model}): {r.text[:160]}")
-            r.raise_for_status()
             data = r.json()
             parts = data["candidates"][0]["content"]["parts"]
             text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
@@ -42,7 +45,7 @@ def _call(prompt, temperature=0.4, retries=5):
             return json.loads(text)
         except Exception as e:  # noqa: BLE001
             log.warning("Gemini xatosi (%d-urinish, %s): %s", attempt + 1, model, e)
-            time.sleep(3 * (attempt + 1))
+            time.sleep(2 * (attempt + 1))
     return None
 
 

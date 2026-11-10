@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -26,7 +26,7 @@ def _int(name, default):
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@MarketPulseZK").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 
 CHECK_INTERVAL_MIN = _int("CHECK_INTERVAL_MIN", 10)
 MAX_POSTS_PER_DAY = _int("MAX_POSTS_PER_DAY", 20)

@@ -173,10 +173,14 @@ def process_price_moves(budget):
         close_levels()
         return 0
     crypto_only = all(a["symbol"] in ("BTC-USD", "ETH-USD") for a in moves)
-    image = images.brand_card(
-        post.get("card_title") or "Bozorda keskin harakat",
-        post.get("card_points") or [f"{a['name']}: {a['move_desc']}" for a in moves[:3]],
-        "CRYPTO" if crypto_only else "MARKETS",
+    image = images.pick_image(
+        {"image": None},
+        {
+            "photo_query": "New York Stock Exchange trading floor" if not crypto_only else "Data center server room",
+            "card_title": post.get("card_title") or "Bozorda keskin harakat",
+            "card_points": post.get("card_points") or [f"{a['name']}: {a['move_desc']}" for a in moves[:3]],
+            "category": "CRYPTO" if crypto_only else "MARKETS",
+        },
     )
     if publish(post["post_html"], image, "price_moves"):
         close_levels()

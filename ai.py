@@ -141,7 +141,8 @@ Javobni faqat JSON ko'rinishida qaytar:
   "summary_uz": "<postning 1 jumlali mazmuni — keyingi takrorlarni aniqlash uchun>",
   "card_title": "<surat kartasi uchun 3-7 so'zli sarlavha, o'zbekcha>",
   "card_points": ["<kartada ko'rsatiladigan 0-3 ta qisqa raqamli fakt, masalan 'S&P 500: −1.2%'. Raqam bo'lmasa bo'sh ro'yxat>"],
-  "category": "<bittasi: MARKETS, MACRO, FED, BONDS, FOREX, COMMODITIES, GEOPOLITICS, CRYPTO, COMPANY, TECH>"
+  "category": "<bittasi: MARKETS, MACRO, FED, BONDS, FOREX, COMMODITIES, GEOPOLITICS, CRYPTO, COMPANY, TECH>",
+  "photo_query": "<maqoladagi asosiy kompaniya, shaxs, mahsulot yoki birja nomi ingliz tilida, Wikipedia'dan haqiqiy suratini topish uchun: masalan 'Nvidia', 'Jensen Huang', 'Boeing 737', 'New York Stock Exchange', 'Federal Reserve Eccles Building', 'Crude oil tanker'>"
 }}
 """
 

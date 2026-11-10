@@ -30,6 +30,19 @@ def _published(entry):
     return None
 
 
+def _entry_image(e):
+    for m in e.get("media_content") or []:
+        if m.get("url"):
+            return m["url"]
+    for m in e.get("media_thumbnail") or []:
+        if m.get("url"):
+            return m["url"]
+    for link in e.get("links") or []:
+        if (link.get("type") or "").startswith("image/") and link.get("href"):
+            return link["href"]
+    return None
+
+
 def fetch_new_items():
     """Barcha manbalardan hali ko'rilmagan va yangi xabarlarni qaytaradi."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_NEWS_AGE_HOURS)
@@ -63,6 +76,7 @@ def fetch_new_items():
                     "source": src["name"],
                     "official": src.get("official", False),
                     "published": pub.isoformat() if pub else None,
+                    "rss_image": _entry_image(e),
                 }
             )
     log.info("Yangi xabarlar: %d ta", len(items))
@@ -110,4 +124,6 @@ def fetch_article(item):
         log.info("Maqola ochilmadi (%s): %s", item["source"], e)
     if len(text) < 200:
         text = f"{item['title']}. {item['summary']}"
+    if not image or "lh3.googleusercontent.com" in image or "gstatic.com" in image:
+        image = item.get("rss_image")
     return {"url": url, "text": text[:6000], "image": image, "domain": urlparse(url).netloc}

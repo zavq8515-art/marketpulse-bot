@@ -10,11 +10,13 @@ GN = "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q="
 SOURCES = [
     # --- Rasmiy manbalar ---
     {"name": "Federal Reserve", "url": "https://www.federalreserve.gov/feeds/press_all.xml", "official": True},
-    {"name": "BLS", "url": "https://www.bls.gov/feed/bls_latest.rss", "official": True},
+    {"name": "BLS", "url": GN + "site:bls.gov+when:3d", "official": True},
     {"name": "BEA", "url": "https://apps.bea.gov/rss/rss.xml", "official": True},
     {"name": "U.S. Treasury", "url": GN + "site:home.treasury.gov+when:2d", "official": True},
     {"name": "EIA", "url": "https://www.eia.gov/rss/todayinenergy.xml", "official": True},
     {"name": "SEC", "url": "https://www.sec.gov/news/pressreleases.rss", "official": True},
+    {"name": "CFTC", "url": GN + "site:cftc.gov+when:3d", "official": True},
+    {"name": "OPEC", "url": GN + "site:opec.org+when:7d", "official": True},
 
     # --- Moliyaviy nashrlar ---
     {"name": "CNBC Finance", "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"},
@@ -24,13 +26,16 @@ SOURCES = [
     {"name": "CNBC Technology", "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910"},
     {"name": "MarketWatch", "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
     {"name": "MarketWatch Pulse", "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"},
-    {"name": "Yahoo Finance", "url": "https://finance.yahoo.com/news/rssindex"},
+    {"name": "Yahoo Finance", "url": "https://finance.yahoo.com/rss/topstories"},
     {"name": "Investing.com", "url": "https://www.investing.com/rss/news_25.rss"},
 
-    # --- Reuters / AP / Bloomberg (Google News orqali) ---
+    # --- Reuters / AP / Bloomberg / WSJ / FT / Barron's (Google News orqali) ---
     {"name": "Reuters", "url": GN + "site:reuters.com+(markets+OR+stocks+OR+fed+OR+oil+OR+treasury)+when:1d"},
     {"name": "AP", "url": GN + "site:apnews.com+(stocks+OR+economy+OR+fed+OR+oil)+when:1d"},
     {"name": "Bloomberg", "url": GN + "site:bloomberg.com+(markets+OR+stocks+OR+fed)+when:1d"},
+    {"name": "Wall Street Journal", "url": GN + "site:wsj.com+(markets+OR+economy+OR+fed+OR+stocks)+when:1d"},
+    {"name": "Financial Times", "url": GN + "site:ft.com+(markets+OR+economy+OR+fed+OR+oil)+when:1d"},
+    {"name": "Barron's", "url": GN + "site:barrons.com+(stocks+OR+markets+OR+earnings)+when:1d"},
 
     # --- Kripto ---
     {"name": "CoinDesk", "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},

@@ -11,20 +11,29 @@ log = logging.getLogger("ai")
 API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
-def _call(prompt, temperature=0.4, retries=3):
-    url = API.format(model=GEMINI_MODEL)
+FALLBACK_MODELS = [GEMINI_MODEL, "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+
+
+def _call(prompt, temperature=0.4, retries=4):
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"},
+        "generationConfig": {
+            "temperature": temperature,
+            "responseMimeType": "application/json",
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
     }
+    models = list(dict.fromkeys(FALLBACK_MODELS))
     for attempt in range(retries):
+        model = models[min(attempt, len(models) - 1)]
+        url = API.format(model=model)
         try:
             r = requests.post(url, params={"key": GEMINI_API_KEY}, json=body, timeout=90)
             if r.status_code in (400, 401, 403):
                 log.error("Gemini API kaliti yoki so'rov noto'g'ri: %s", r.text[:300])
                 return None
-            if r.status_code == 429 or r.status_code >= 500:
-                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+            if r.status_code in (404, 429) or r.status_code >= 500:
+                raise RuntimeError(f"HTTP {r.status_code} ({model}): {r.text[:160]}")
             r.raise_for_status()
             data = r.json()
             parts = data["candidates"][0]["content"]["parts"]
@@ -32,8 +41,8 @@ def _call(prompt, temperature=0.4, retries=3):
             text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             return json.loads(text)
         except Exception as e:  # noqa: BLE001
-            log.warning("Gemini xatosi (%d-urinish): %s", attempt + 1, e)
-            time.sleep(5 * (attempt + 1))
+            log.warning("Gemini xatosi (%d-urinish, %s): %s", attempt + 1, model, e)
+            time.sleep(3 * (attempt + 1))
     return None
 
 
@@ -78,9 +87,9 @@ def triage(items, recent):
     now = datetime.now(TASHKENT).strftime("%Y-%m-%d %H:%M")
     recent_txt = "\n".join(f"- [{p['topic']}] {p['summary']}" for p in recent) or "(hali post yo'q)"
     selected = []
-    # Juda ko'p xabar bo'lsa bo'laklab yuboramiz
-    for start in range(0, len(items), 60):
-        chunk = items[start : start + 60]
+    # Juda ko'p xabar bo'lsa 30 tadan bo'laklab yuboramiz
+    for start in range(0, len(items), 30):
+        chunk = items[start : start + 30]
         items_txt = "\n".join(
             f"{start + i}. [{it['source']}{' (RASMIY)' if it['official'] else ''}] {it['title']} — {it['summary'][:200]}"
             for i, it in enumerate(chunk)

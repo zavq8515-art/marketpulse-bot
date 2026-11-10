@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+data/preview/
+data/*.log
+data/*.txt
+data/marketpulse_dryrun.db

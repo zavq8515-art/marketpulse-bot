@@ -215,3 +215,174 @@ def write_price_alert(moves, headlines, recent):
         recent="\n".join(f"- {p['summary']}" for p in recent) or "(yo'q)",
     )
     return _call(prompt, temperature=0.3)
+
+
+DAILY_CLOSE_PROMPT = """Sen MARKETPULSE tahlilchisisan.
+Hozirgi sana va vaqt (Toshkent, UTC+5): {now}.
+
+Bugungi AQSH va global moliya bozorlari yopilish / kunlik natijalari:
+{indices}
+
+So'nggi muhim bozor sarlavhalari (sabablar va voqealar):
+{headlines}
+
+Quyidagi tuzilishda bitta Telegram post yoz (o'zbek tilida, lotin yozuvida, Telegram HTML: <b>, <i>). 950 belgidan oshmasin:
+📊 <b>MARKETPULSE | KUNLIK BOZOR YAKUNI</b>
+📅 {date}
+
+📉 <b>AQSH FOND BOZORI:</b>
+• S&P 500: [narx] ([o'zgarish])
+• Nasdaq: [narx] ([o'zgarish])
+• Dow Jones: [narx] ([o'zgarish])
+• Russell 2000: [narx] ([o'zgarish])
+• VIX (qo‘rquv indeksi): [qiymat]
+
+💵 <b>OBLIGATSIYA, DOLLAR VA XOMASHYO:</b>
+• US 10Y Yield: [qiymat]
+• DXY (dollar indeksi): [qiymat]
+• Brent neft: [narx]
+• Oltin: [narx]
+• Bitcoin: [narx]
+
+📌 <b>Kunning asosiy drayveri:</b> 1-2 jumla (nima sababdan bozor ko'tarildi yoki tushdi).
+💡 <b>Investor uchun ma’nosi:</b> 1-2 jumla xulosa.
+
+Qat'iy qoidalar:
+- Faqat yuqoridagi aniq raqamlarni ishlat, narxlarni to'qima.
+- Agar biror ko'rsatkich ro'yxatda bo'lmasa, uni yozma.
+JSON: {{"post_html": "...", "summary_uz": "Kunlik bozor yakunlari: asosiy indekslar va xomashyo harakati.", "card_title": "Bozor yakunlari", "card_points": ["S&P 500: ...", "Nasdaq: ...", "Brent: ..."], "photo_query": "New York Stock Exchange trading floor"}}
+"""
+
+
+def write_daily_close(indices, headlines):
+    from datetime import datetime
+
+    now = datetime.now(TASHKENT)
+    prompt = DAILY_CLOSE_PROMPT.format(
+        now=now.strftime("%Y-%m-%d %H:%M"),
+        date=now.strftime("%d.%m.%Y"),
+        indices="\n".join(f"- {i['name']}: {i['price']} ({i['change']})" for i in indices),
+        headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
+    )
+    return _call(prompt, temperature=0.3)
+
+
+SECTOR_ETF_PROMPT = """Sen MARKETPULSE tahlilchisisan.
+Hozirgi vaqt (Toshkent): {now}.
+
+AQSH fond bozorining asosiy 11 ta SEKTOR ETFlari natijalari (yuqoridan pastga saralangan):
+{sectors}
+
+So'nggi bozor sarlavhalari:
+{headlines}
+
+Telegram post yoz (o'zbek, lotin, HTML: <b>, <i>). 950 belgidan oshmasin:
+🏛 <b>MARKETPULSE | SEKTOR ETFLARI TAHLILI</b>
+📅 {date}
+
+🟢 <b>Yetakchi sektorlar (eng yaxshi natija):</b>
+• [Top 3-4 sektor nomi va % o'zgarishi]
+
+🔴 <b>Orqada qolgan sektorlar:</b>
+• [Eng ko'p pasaygan 3-4 sektor nomi va % o'zgarishi]
+
+💡 <b>Sektorlar rotatsiyasi va investor uchun tahlil:</b>
+2-3 jumla: kapital qayerga oqmoqda (masalan: mudofaa sektorlarimi yoki texnologiyagami), investor qaysi trendni kuzatishi kerak.
+
+JSON: {{"post_html": "...", "summary_uz": "Sektor ETFlari haftalik/kunlik rotatsiya tahlili.", "card_title": "Sektor ETFlari", "card_points": ["Yetakchi: ...", "Tushuvchi: ..."], "photo_query": "Wall Street stock exchange floor"}}
+"""
+
+
+def write_sector_etfs(sectors, headlines):
+    from datetime import datetime
+
+    now = datetime.now(TASHKENT)
+    prompt = SECTOR_ETF_PROMPT.format(
+        now=now.strftime("%Y-%m-%d %H:%M"),
+        date=now.strftime("%d.%m.%Y"),
+        sectors="\n".join(f"- {s['name']} ({s['symbol']}): ${s['price']} ({s['change_desc']})" for s in sectors),
+        headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
+    )
+    return _call(prompt, temperature=0.3)
+
+
+CRYPTO_PULSE_PROMPT = """Sen MARKETPULSE tahlilchisisan.
+Hozirgi vaqt (Toshkent): {now}.
+
+Kripto bozori asosiy aktivlari:
+{cryptos}
+
+Kriptoga oid so'nggi yangiliklar va sarlavhalar:
+{headlines}
+
+Telegram post yoz (o'zbek, lotin, HTML: <b>, <i>). 900 belgidan oshmasin:
+₿ <b>MARKETPULSE | KRIPTO PULSE</b>
+📅 {date}
+
+• Bitcoin (BTC): [narx] ([o'zgarish])
+• Ethereum (ETH): [narx] ([o'zgarish])
+• Solana va boshqa altcoinlar harakati
+
+📌 <b>Bozor omillari:</b> ETF oqimlari, likvidlik yoki regulyatsiya yangiliklari.
+💡 <b>Investor uchun ma’nosi:</b> 1-2 jumla aniq bozor xulosasi.
+
+JSON: {{"post_html": "...", "summary_uz": "Bitcoin va kripto bozori sharhi.", "card_title": "Kripto Pulse", "card_points": ["Bitcoin: ...", "Ethereum: ..."], "photo_query": "Bitcoin cryptocurrency blockchain"}}
+"""
+
+
+def write_crypto_pulse(cryptos, headlines):
+    from datetime import datetime
+
+    now = datetime.now(TASHKENT)
+    prompt = CRYPTO_PULSE_PROMPT.format(
+        now=now.strftime("%Y-%m-%d %H:%M"),
+        date=now.strftime("%d.%m.%Y"),
+        cryptos="\n".join(f"- {c['name']} ({c['symbol']}): ${c['price']} ({c['change_desc']})" for c in cryptos),
+        headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
+    )
+    return _call(prompt, temperature=0.3)
+
+
+WEEKLY_GAZETTE_PROMPT = """Sen MARKETPULSE bosh tahlilchisisan.
+Sana: {date}.
+
+Hafta yakunlari bo'yicha asosiy bozor ko'rsatkichlari:
+{market_data}
+
+Haftaning eng muhim yangiliklari va sarlavhalari:
+{headlines}
+
+MARKETPULSE "HAFTALIK INVESTOR GAZETASI" posti (o'zbek, lotin, HTML: <b>, <i>). 950 belgidan oshmasin:
+📰 <b>MARKETPULSE | HAFTALIK INVESTOR GAZETASI</b>
+📅 {date}
+
+1️⃣ <b>NIMA BO‘LDI?</b>
+Haftaning eng muhim 2-3 ta voqeasi qisqa sarhisobi.
+
+2️⃣ <b>NEGA BO‘LDI?</b>
+Asosiy fundamental sabablar (Fed, inflyatsiya, geosiyosat, korporativ daromadlar).
+
+3️⃣ <b>BOZOR REAKSIYASI:</b>
+Indekslar, xomashyo va obligatsiyalar yakuniy holati.
+
+4️⃣ <b>KEYINGI HAFTA REJASI:</b>
+Kelayotgan haftada kutilayotgan muhim iqtisodiy voqealar.
+
+💡 <b>INVESTOR UCHUN SIGNAL:</b>
+Kelgusi hafta uchun asosiy xatarlar va imkoniyatlar.
+
+JSON: {{"post_html": "...", "summary_uz": "Haftalik bozor sarhisobi va kelgusi hafta rejalari.", "card_title": "Haftalik Gazeta", "card_points": ["Hafta yakunlari", "Asosiy signallar", "Kelgusi hafta"], "photo_query": "New York Stock Exchange traders floor"}}
+"""
+
+
+def write_weekly_gazette(indices, headlines):
+    from datetime import datetime
+
+    now = datetime.now(TASHKENT)
+    prompt = WEEKLY_GAZETTE_PROMPT.format(
+        now=now.strftime("%Y-%m-%d %H:%M"),
+        date=now.strftime("%d.%m.%Y"),
+        market_data="\n".join(f"- {i['name']}: {i['price']} ({i['change']})" for i in indices),
+        headlines="\n".join(f"- {h}" for h in headlines[:30]) or "(yo'q)",
+    )
+    return _call(prompt, temperature=0.3)

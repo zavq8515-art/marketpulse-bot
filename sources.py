@@ -40,6 +40,15 @@ SOURCES = [
     # --- Kripto ---
     {"name": "CoinDesk", "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
     {"name": "The Block", "url": "https://www.theblock.co/rss.xml"},
+    {"name": "CoinTelegraph", "url": "https://cointelegraph.com/rss"},
+
+    # --- Geosiyosat va Global Bozorlar ---
+    {"name": "Geopolitics & Defense", "url": GN + "(geopolitics+OR+tariffs+OR+sanctions+OR+hormuz+OR+middle+east+oil)+when:1d"},
+    {"name": "Reuters Geopolitics", "url": GN + "site:reuters.com+(geopolitics+OR+trade+war+OR+china+tariffs+OR+opec)+when:1d"},
+
+    # --- Sektorlar va Aksiyalar Tahlili ---
+    {"name": "Benzinga Stocks", "url": GN + "site:benzinga.com+(stocks+OR+earnings+OR+analysts)+when:1d"},
+    {"name": "Seeking Alpha", "url": GN + "site:seekingalpha.com+(market+pulse+OR+wall+street+breakfast)+when:1d"},
 ]
 
 # Shu domenlardagi suratlar kanalda ishlatilishi mumkin (rasmiy / ochiq litsenziya).

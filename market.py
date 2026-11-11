@@ -31,6 +31,102 @@ WATCHLIST = {
     "NVDA": ("NVIDIA", 5.0, "pct"),
 }
 
+DAILY_INDEX_SYMBOLS = {
+    "^GSPC": ("S&P 500", "pct"),
+    "^IXIC": ("Nasdaq", "pct"),
+    "^DJI": ("Dow Jones", "pct"),
+    "^RUT": ("Russell 2000", "pct"),
+    "^VIX": ("VIX (qo‘rquv indeksi)", "pct"),
+    "^TNX": ("US 10Y Yield", "bp"),
+    "DX-Y.NYB": ("DXY Dollar indeksi", "pct"),
+    "CL=F": ("WTI neft", "pct"),
+    "BZ=F": ("Brent neft", "pct"),
+    "GC=F": ("Oltin", "pct"),
+    "BTC-USD": ("Bitcoin", "pct"),
+}
+
+SECTOR_ETFS = {
+    "XLK": "Texnologiya",
+    "SMH": "Yarimo‘tkazgichlar",
+    "XLE": "Energetika",
+    "XLF": "Moliya",
+    "XLV": "Sog‘liqni saqlash",
+    "XLI": "Sanoat",
+    "XLY": "Iste’mol (ixtiyoriy)",
+    "XLP": "Iste’mol (asosiy)",
+    "XLC": "Aloqa va media",
+    "XLU": "Kommunal xizmatlar",
+    "XLRE": "Ko‘chmas mulk",
+}
+
+CRYPTO_WATCH = {
+    "BTC-USD": "Bitcoin",
+    "ETH-USD": "Ethereum",
+    "SOL-USD": "Solana",
+    "BNB-USD": "BNB",
+    "XRP-USD": "XRP",
+}
+
+
+def get_daily_indices():
+    items = []
+    for sym, (name, kind) in DAILY_INDEX_SYMBOLS.items():
+        try:
+            last, prev = _quote(sym)
+            if kind == "bp":
+                chg = (last - prev) * 100
+                desc = f"{chg:+.1f} bp"
+            else:
+                chg = (last - prev) / prev * 100
+                desc = f"{chg:+.2f}%"
+            items.append({
+                "symbol": sym,
+                "name": name,
+                "price": round(last, 2 if kind != "bp" else 3),
+                "change": desc,
+                "change_pct": chg,
+            })
+        except Exception as e:
+            log.debug("Index quote error for %s: %s", sym, e)
+    return items
+
+
+def get_sector_etfs():
+    items = []
+    for sym, name in SECTOR_ETFS.items():
+        try:
+            last, prev = _quote(sym)
+            pct = (last - prev) / prev * 100
+            items.append({
+                "symbol": sym,
+                "name": name,
+                "price": round(last, 2),
+                "change_pct": pct,
+                "change_desc": f"{pct:+.2f}%",
+            })
+        except Exception as e:
+            log.debug("Sector ETF quote error for %s: %s", sym, e)
+    items.sort(key=lambda x: -x["change_pct"])
+    return items
+
+
+def get_crypto_pulse():
+    items = []
+    for sym, name in CRYPTO_WATCH.items():
+        try:
+            last, prev = _quote(sym)
+            pct = (last - prev) / prev * 100
+            items.append({
+                "symbol": sym,
+                "name": name,
+                "price": round(last, 2),
+                "change_pct": pct,
+                "change_desc": f"{pct:+.2f}%",
+            })
+        except Exception as e:
+            log.debug("Crypto quote error for %s: %s", sym, e)
+    return items
+
 
 def _quote(sym):
     """Yahoo Finance chart API: (oxirgi narx, oldingi yopilish)."""

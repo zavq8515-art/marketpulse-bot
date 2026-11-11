@@ -37,10 +37,10 @@ jobs:
           GEMINI_MODEL: "gemini-3.5-flash-lite"
           DRY_RUN: "false"
           QUIET_HOURS: "01-07"
-          MAX_POSTS_PER_DAY: "20"
-          MAX_POSTS_PER_RUN: "2"
-          MIN_GAP_MIN: "15"
-          MIN_IMPORTANCE: "7"
+          MAX_POSTS_PER_DAY: "50"
+          MAX_POSTS_PER_RUN: "3"
+          MIN_GAP_MIN: "3"
+          MIN_IMPORTANCE: "5"
         run: python main.py --once
 
       - name: Save database state

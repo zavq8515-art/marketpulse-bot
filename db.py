@@ -37,6 +37,12 @@ def init():
                 level INTEGER,
                 PRIMARY KEY (symbol, day, level)
             );
+            CREATE TABLE IF NOT EXISTS scheduled_features (
+                feature TEXT,
+                period_key TEXT,
+                posted_at TEXT,
+                PRIMARY KEY (feature, period_key)
+            );
             """
         )
 
@@ -120,3 +126,22 @@ def price_alert_done(symbol, day, level):
 def mark_price_alert(symbol, day, level):
     with _conn() as c:
         c.execute("INSERT OR IGNORE INTO price_alerts VALUES (?,?,?)", (symbol, day, level))
+
+
+def is_feature_done(feature, period_key):
+    with _conn() as c:
+        return (
+            c.execute(
+                "SELECT 1 FROM scheduled_features WHERE feature=? AND period_key=?",
+                (feature, period_key),
+            ).fetchone()
+            is not None
+        )
+
+
+def mark_feature_done(feature, period_key):
+    with _conn() as c:
+        c.execute(
+            "INSERT OR IGNORE INTO scheduled_features (feature, period_key, posted_at) VALUES (?,?,?)",
+            (feature, period_key, now_utc().isoformat()),
+        )

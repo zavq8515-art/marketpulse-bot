@@ -44,8 +44,8 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(DATA_DIR / "bot.log", encoding="utf-8")],
 )
 log = logging.getLogger("main")
-MIN_NOVELTY = 6
-BREAKING = 9
+MIN_NOVELTY = 5
+BREAKING = 8
 
 
 def in_quiet_hours():
@@ -134,8 +134,6 @@ def process_news(budget):
         if posted >= budget:
             break
         breaking = s.get("importance", 0) >= BREAKING
-        if posted >= 1 and not breaking:
-            break  # oddiy yangilik — bir tekshiruvda bittadan; qolganlari keyingi safar
         if not breaking and not gap_ok():
             log.info("Oraliq vaqt hali o'tmadi, keyingi tekshiruvda chiqariladi")
             break
@@ -190,10 +188,118 @@ def process_price_moves(budget):
     return 0
 
 
+def post_daily_close():
+    log.info("Kunlik bozor yakunlari posti tayyorlanmoqda...")
+    indices = market.get_daily_indices()
+    if not indices:
+        return False
+    post = ai.write_daily_close(indices, db.recent_titles())
+    if not post or not post.get("post_html"):
+        return False
+    img = images.pick_image({"image": None}, post)
+    today_str = datetime.now(TASHKENT).strftime("%Y-%m-%d")
+    if publish(post["post_html"], img, f"daily_close_{today_str}"):
+        db.mark_feature_done("daily_close", today_str)
+        db.add_post(None, f"daily-close-{today_str}", post.get("summary_uz", "Kunlik bozor yakuni"), "")
+        log.info("Kunlik bozor yakuni posti muvaffaqiyatli chiqdi!")
+        return True
+    return False
+
+
+def post_sector_etfs():
+    log.info("Sektor ETFlari tahlili tayyorlanmoqda...")
+    sectors = market.get_sector_etfs()
+    if not sectors:
+        return False
+    post = ai.write_sector_etfs(sectors, db.recent_titles())
+    if not post or not post.get("post_html"):
+        return False
+    img = images.pick_image({"image": None}, post)
+    week_key = datetime.now(TASHKENT).strftime("%Y-W%W")
+    if publish(post["post_html"], img, f"sector_etfs_{week_key}"):
+        db.mark_feature_done("sector_etfs", week_key)
+        db.add_post(None, f"sector-etfs-{week_key}", post.get("summary_uz", "Sektor ETFlari tahlili"), "")
+        log.info("Sektor ETFlari posti muvaffaqiyatli chiqdi!")
+        return True
+    return False
+
+
+def post_crypto_pulse():
+    log.info("Kripto Pulse posti tayyorlanmoqda...")
+    cryptos = market.get_crypto_pulse()
+    if not cryptos:
+        return False
+    post = ai.write_crypto_pulse(cryptos, db.recent_titles())
+    if not post or not post.get("post_html"):
+        return False
+    img = images.pick_image({"image": None}, post)
+    today_str = datetime.now(TASHKENT).strftime("%Y-%m-%d")
+    if publish(post["post_html"], img, f"crypto_pulse_{today_str}"):
+        db.mark_feature_done("crypto_pulse", today_str)
+        db.add_post(None, f"crypto-pulse-{today_str}", post.get("summary_uz", "Kripto bozor sharhi"), "")
+        log.info("Kripto Pulse posti muvaffaqiyatli chiqdi!")
+        return True
+    return False
+
+
+def post_weekly_gazette():
+    log.info("Haftalik Investor Gazetasi tayyorlanmoqda...")
+    indices = market.get_daily_indices()
+    if not indices:
+        return False
+    post = ai.write_weekly_gazette(indices, db.recent_titles())
+    if not post or not post.get("post_html"):
+        return False
+    img = images.pick_image({"image": None}, post)
+    week_key = datetime.now(TASHKENT).strftime("%Y-W%W")
+    if publish(post["post_html"], img, f"weekly_gazette_{week_key}"):
+        db.mark_feature_done("weekly_gazette", week_key)
+        db.add_post(None, f"weekly-gazette-{week_key}", post.get("summary_uz", "Haftalik Investor Gazetasi"), "")
+        log.info("Haftalik Investor Gazetasi posti muvaffaqiyatli chiqdi!")
+        return True
+    return False
+
+
+def process_scheduled_features():
+    """Kunlik va haftalik doimiy tahliliy postlar avtomatik tekshiruvi."""
+    now = datetime.now(TASHKENT)
+    today_str = now.strftime("%Y-%m-%d")
+    week_key = now.strftime("%Y-W%W")
+    weekday = now.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+
+    # 1. Kunlik bozor yakuni (dushanba-juma savdo yakunlari: seshanba-shanba 07:00-11:00 Toshkent vaqti)
+    if weekday in (1, 2, 3, 4, 5) and 7 <= now.hour <= 11:
+        if not db.is_feature_done("daily_close", today_str):
+            post_daily_close()
+
+    # 2. Sektor ETFlari (haftada 1 marta: juma kechasi yoki shanba)
+    if (weekday == 4 and now.hour >= 20) or (weekday == 5 and now.hour <= 18):
+        if not db.is_feature_done("sector_etfs", week_key):
+            post_sector_etfs()
+
+    # 3. Kripto Pulse (har kuni 12:00-15:00)
+    if 12 <= now.hour <= 15:
+        if not db.is_feature_done("crypto_pulse", today_str):
+            post_crypto_pulse()
+
+    # 4. Haftalik Investor Gazetasi (haftada 1 marta: shanba yoki yakshanba 10:00-16:00)
+    if weekday in (5, 6) and 10 <= now.hour <= 16:
+        if not db.is_feature_done("weekly_gazette", week_key):
+            post_weekly_gazette()
+
+
 def run_once():
     if in_quiet_hours():
         log.info("Tungi tinchlik vaqti (%s), o'tkazib yuborildi", QUIET_HOURS)
         return
+
+    # 1. Rejalashtirilgan doimiy postlar
+    try:
+        process_scheduled_features()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Rejalashtirilgan postlar tekshiruvida xato: %s", e)
+
+    # 2. Yangiliklar va keskin narx harakatlari
     budget = min(MAX_POSTS_PER_RUN, MAX_POSTS_PER_DAY - db.posts_today_count(TASHKENT))
     if budget <= 0:
         log.info("Kunlik limit (%d) tugadi", MAX_POSTS_PER_DAY)
@@ -209,6 +315,10 @@ def main():
     p.add_argument("--once", action="store_true")
     p.add_argument("--check", action="store_true")
     p.add_argument("--card", action="store_true")
+    p.add_argument("--daily-close", action="store_true")
+    p.add_argument("--sector-etfs", action="store_true")
+    p.add_argument("--crypto", action="store_true")
+    p.add_argument("--gazette", action="store_true")
     args = p.parse_args()
     db.init()
 
@@ -221,6 +331,18 @@ def main():
     if args.check:
         user, title, status, can_post = telegram_api.check()
         print(f"Bot: @{user}\nKanal: {title}\nHolat: {status}\nPost yubora oladimi: {'HA' if can_post else 'YOQ'}")
+        return
+    if args.daily_close:
+        post_daily_close()
+        return
+    if args.sector_etfs:
+        post_sector_etfs()
+        return
+    if args.crypto:
+        post_crypto_pulse()
+        return
+    if args.gazette:
+        post_weekly_gazette()
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

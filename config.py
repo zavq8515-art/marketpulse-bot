@@ -37,8 +37,17 @@ MAX_NEWS_AGE_HOURS = _int("MAX_NEWS_AGE_HOURS", 6)
 QUIET_HOURS = os.getenv("QUIET_HOURS", "").strip()
 DRY_RUN = os.getenv("DRY_RUN", "true").strip().lower() in ("1", "true", "yes")
 
-TASHKENT = ZoneInfo("Asia/Tashkent")
-NEW_YORK = ZoneInfo("America/New_York")
+try:
+    TASHKENT = ZoneInfo("Asia/Tashkent")
+except Exception:
+    from datetime import timedelta, timezone
+    TASHKENT = timezone(timedelta(hours=5))
+
+try:
+    NEW_YORK = ZoneInfo("America/New_York")
+except Exception:
+    from datetime import timedelta, timezone
+    NEW_YORK = timezone(timedelta(hours=-5))
 
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)

@@ -290,3 +290,95 @@ def pick_image(article, post):
         [p for p in post.get("card_points", []) if p][:3],
         cat,
     )
+
+
+GOLD = (255, 195, 0)
+GOLD_TEXT = (255, 215, 80)
+
+
+def academy_card(lesson_id: int, title: str, module_name: str = "", points: list = None):
+    """Akademiya darslari uchun maxsus brend karta (gold/navy/cyan dizayn)."""
+    img = Image.new("RGB", (W, H))
+    d = ImageDraw.Draw(img)
+    for y in range(H):
+        t = y / H
+        d.line(
+            [(0, y), (W, y)],
+            fill=tuple(int(NAVY_TOP[i] + (NAVY_BOTTOM[i] - NAVY_TOP[i]) * t) for i in range(3)),
+        )
+    for x in range(0, W, 80):
+        d.line([(x, 0), (x, H)], fill=(16, 36, 75), width=1)
+    for y in range(0, H, 80):
+        d.line([(0, y), (W, y)], fill=(16, 36, 75), width=1)
+
+    # Yuqori oltin chiziq
+    d.rectangle([0, 0, W, 6], fill=GOLD)
+
+    # Akademiya badge
+    badge_txt = f"🎓 AKADEMIYA | DARS #{lesson_id}"
+    f_badge = _font(26, bold=True)
+    bw = d.textlength(badge_txt, font=f_badge) + 36
+    d.rounded_rectangle([60, 42, 60 + bw, 88], radius=8, fill=GOLD)
+    d.text((78, 50), badge_txt, font=f_badge, fill=NAVY_TOP)
+
+    # Modul nomi
+    if module_name:
+        f_mod = _font(20, bold=False)
+        short_mod = module_name.split(":")[0].strip() if ":" in module_name else module_name[:24]
+        mw = d.textlength(short_mod, font=f_mod) + 28
+        d.rounded_rectangle([60 + bw + 14, 44, 60 + bw + 14 + mw, 86], radius=8, outline=CYAN, width=2, fill=(10, 30, 65))
+        d.text((60 + bw + 28, 53), short_mod, font=f_mod, fill=CYAN)
+
+    # Dars sarlavhasi
+    f_title = _font(54, bold=True)
+    lines = _wrap(d, title, f_title, W - 120)
+    if len(lines) > 2:
+        f_title = _font(44, bold=True)
+        lines = _wrap(d, title, f_title, W - 120)[:3]
+    y = 125
+    for line in lines:
+        d.text((60, y), line, font=f_title, fill=WHITE)
+        y += f_title.size + 14
+
+    # Asosiy nuqtalar / terminlar
+    f_pt = _font(30, bold=False)
+    y += 15
+    for p in (points or [])[:3]:
+        d.rounded_rectangle([60, y + 6, 68, y + 36], radius=3, fill=GOLD)
+        d.text((86, y), str(p), font=f_pt, fill=(230, 240, 255))
+        y += 48
+
+    # Pastki brend chiziq
+    d.line([(60, H - 85), (W - 60, H - 85)], fill=(30, 60, 110), width=2)
+    f_brand = _font(34, bold=True)
+    d.text((60, H - 68), "MARKETPULSE", font=f_brand, fill=WHITE)
+    f_sub = _font(22, bold=False)
+    d.text((60 + d.textlength("MARKETPULSE", font=f_brand) + 16, H - 60), "• 100 Qadamda Investitsiya va Treyderlik", font=f_sub, fill=GOLD_TEXT)
+
+    channel_txt = "t.me/MarketPulseZK"
+    f_chan = _font(24, bold=True)
+    d.text((W - 60 - d.textlength(channel_txt, font=f_chan), H - 62), channel_txt, font=f_chan, fill=CYAN)
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
+
+
+def pick_academy_image(lesson_id: int, lesson_data: dict, post: dict):
+    """Akademiya darsi uchun: haqiqiy mavzuli foto yoki maxsus akademiya kartasi."""
+    query = post.get("photo_query") or lesson_data.get("photo_query")
+    if query:
+        url = _wiki_photo_url(query)
+        if url:
+            img = _download_valid_photo(url)
+            if img:
+                return img
+    # Agar foto topilmasa, oltin ramkali maxsus akademiya kartasini yaratadi
+    points = post.get("card_points") or [t[0] for t in lesson_data.get("terms", [])[:3]]
+    return academy_card(
+        lesson_id=lesson_id,
+        title=lesson_data.get("title", ""),
+        module_name=lesson_data.get("module", ""),
+        points=points,
+    )
+

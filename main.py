@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import ai
 import db
+import education
 import fetcher
 import images
 import market
@@ -287,6 +288,10 @@ def process_scheduled_features():
         if not db.is_feature_done("weekly_gazette", week_key):
             post_weekly_gazette()
 
+    # 5. Weekend Akademiya (shanba va yakshanba kunlari har biri 3 tadan = 6 ta dars)
+    if weekday in (5, 6):
+        education.process_weekend_academy()
+
 
 def run_once():
     if in_quiet_hours():
@@ -319,6 +324,9 @@ def main():
     p.add_argument("--sector-etfs", action="store_true")
     p.add_argument("--crypto", action="store_true")
     p.add_argument("--gazette", action="store_true")
+    p.add_argument("--lesson", type=int, help="Aniq dars ID raqamini chiqarish (1-100)")
+    p.add_argument("--next-lesson", action="store_true", help="Navbatdagi akademiya darsini chiqarish")
+    p.add_argument("--academy-status", action="store_true", help="Akademiya holatini ko'rish")
     args = p.parse_args()
     db.init()
 
@@ -343,6 +351,20 @@ def main():
         return
     if args.gazette:
         post_weekly_gazette()
+        return
+    if args.lesson:
+        education.publish_lesson(args.lesson)
+        return
+    if args.next_lesson:
+        education.publish_lesson()
+        return
+    if args.academy_status:
+        next_id = education.get_next_lesson_id()
+        l = education.get_lesson(next_id)
+        print(f"\n🎓 MARKETPULSE AKADEMIYA HOLATI:")
+        print(f"Keyingi navbatdagi dars: #{next_id}")
+        print(f"Modul: {l['module']}")
+        print(f"Mavzu: {l['title']}")
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

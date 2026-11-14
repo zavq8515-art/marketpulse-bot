@@ -1,4 +1,10 @@
 """Gemini API orqali: (1) yangiliklarni saralash, (2) o'zbekcha post yozish."""
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 import json
 import logging
 import time

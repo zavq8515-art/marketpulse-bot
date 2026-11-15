@@ -7,6 +7,7 @@ except Exception:
 
 import json
 import logging
+import re
 import time
 
 import requests
@@ -113,6 +114,34 @@ def triage(items, recent):
     return selected if any_ok else None
 
 
+def clean_post_html(html: str, source_name: str = "", url: str = "") -> str:
+    """Post matnini tozalash:
+    1. 'Investor uchun ma'nosi' bo'limini olib tashlaydi.
+    2. 'Manba' qatori doim mavjud bo'lishini 100% kafolatlaydi.
+    """
+    if not html:
+        return html
+
+    # 1. 'Investor uchun ma'nosi' bo'limini va uning matnini qirqib tashlash
+    pattern = r"(?:💡\s*)?(?:<blockquote>\s*)?(?:<b>\s*)?(?:💡\s*)?(?:Investor\s+uchun\s+ma[’'‘`]nosi:?)\s*(?:</b>)?.*?(?=(?:<i>\s*Manba|</blockquote>|\Z))"
+    html = re.sub(pattern, "", html, flags=re.DOTALL | re.IGNORECASE).strip()
+    html = re.sub(r"<blockquote>\s*</blockquote>", "", html).strip()
+
+    # Bo'sh qatorlarni ixchamlashtirish
+    html = re.sub(r"\n{3,}", "\n\n", html).strip()
+
+    # 2. 'Manba' doim bo'lishini ta'minlash
+    if "manba" not in html.lower():
+        if source_name and url:
+            html += f'\n\n<i>Manba: <a href="{url}">{source_name}</a></i>'
+        elif source_name:
+            html += f"\n\n<i>Manba: {source_name}</i>"
+        elif url:
+            html += f'\n\n<i>Manba: <a href="{url}">{url}</a></i>'
+
+    return html.strip()
+
+
 WRITER_PROMPT = """Sen MARKETPULSE — o'zbek tilidagi professional moliyaviy Telegram kanal tahlilchisisan.
 Shior: "Murakkab moliya → oddiy til → kuchli signal."
 Hozirgi vaqt (Toshkent, UTC+5): {now}. AQSH (New York) vaqti: {ny}.
@@ -127,21 +156,20 @@ QAT'IY QOIDALAR:
 - Vaqtlarni Toshkent vaqtida ber (ET dan aylantirsang, aynan shu sanadagi farqni hisobga ol).
 - Tasdiqlanmagan xabar bo'lsa "xabarlarga ko‘ra" / "manbalarga ko‘ra" deb yoz, fakt sifatida berma.
 - Moliyaviy terminni inglizcha qoldirsang, birinchi marta qavs ichida qisqa izoh ber (masalan: EPS (aksiya boshiga foyda)).
-- Yangilikni qayta aytish bilan cheklanma: albatta "Investor uchun ma’nosi" qismida bozorga ta'sirini tushuntir.
+- "Investor uchun ma'nosi" degan bo'lim yoki jumlani UMUMAN YOZMA (olib tashlangan). Yangilik tafsilotlari va raqamlarni aniq va lo'nda tushuntir.
+- Har bir post oxirida DOIM manba ko'rsatilsin: <i>Manba: <a href="{url}">{source}</a></i>. Manbani aslo tushirib qoldirma!
 - Shaxs yoki kompaniya tilga olinsa, kimligini qisqa ayt (masalan: "NVIDIA bosh direktori Jensen Huang", "Fed raisi").
   O'quvchi kontekstsiz tushunmaydigan jumla yozma.
 - Qo'shimcha kontekst uchun "SHU MAVZUDAGI BOSHQA XABARLAR" bo'limidan ham foydalan (u yerdagi faktlar ham manba hisoblanadi).
 - AI qolipidagi so'zlardan qoch ("Ushbu maqolada", "Xulosa qilib aytganda", "muhim ahamiyatga ega" kabi). Tabiiy, qisqa yoz.
 - Emoji me'yorida (2-4 ta).
 - Telegram HTML formatida yoz: faqat <b>, <i>, <a href="...">, <blockquote> teglari. Markdown ishlatma.
-- post_html uzunligi 950 belgidan OSHMASIN (surat ostiga sig'ishi kerak).
+- post_html uzunligi 900 belgidan OSHMASIN (surat ostiga sig'ishi kerak).
 
 POST TUZILISHI (post_html):
 <emoji> <b>QISQA SARLAVHA KATTA HARFDA</b>
 
-2-4 qisqa jumla yoki 2-4 ta "•" bilan boshlanuvchi qator: nima bo'ldi, asosiy raqamlar.
-
-<b>💡 Investor uchun ma’nosi:</b> 1-2 jumla.
+2-4 qisqa jumla yoki 2-4 ta "•" bilan boshlanuvchi qator: nima bo'ldi, asosiy raqamlar, voqea tafsilotlari.
 
 <i>Manba: <a href="{url}">{source}</a></i>
 
@@ -185,6 +213,7 @@ def write_post(item, article, related=None):
     res = _call(prompt, temperature=0.5)
     if not res or not res.get("post_html"):
         return None
+    res["post_html"] = clean_post_html(res["post_html"], source_name=item.get("source", ""), url=article.get("url", ""))
     return res
 
 
@@ -203,7 +232,8 @@ Aks holda BITTA qisqa Telegram post yoz (o'zbek, lotin, Telegram HTML: <b>, <i>)
 - Sarlavha: "⚡️ <b>BOZORDA KESKIN HARAKAT</b>" yoki mazmunga mos boshqa qisqa sarlavha.
 - Raqamlarni faqat yuqoridagidan ol, to'qima. INTRADAY ekanini va ma'lumot vaqtini ko'rsat.
 - Sabab sarlavhalarda aniq ko'rinsa ayt, aniq bo'lmasa "aniq sabab hali rasman tasdiqlanmagan" de.
-- "💡 Investor uchun ma’nosi" qatori bo'lsin.
+- "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA (olib tashlangan).
+- Post oxirida albatta: <i>Manba: Yahoo Finance / MarketPulse</i> bo'lsin.
 JSON: {{"skip": false, "post_html": "...", "summary_uz": "...", "card_title": "...", "card_points": ["eng muhim 3 ta harakat, masalan 'S&P 500: +2.3%'"]}}
 """
 
@@ -220,7 +250,10 @@ def write_price_alert(moves, headlines, recent):
         headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
         recent="\n".join(f"- {p['summary']}" for p in recent) or "(yo'q)",
     )
-    return _call(prompt, temperature=0.3)
+    res = _call(prompt, temperature=0.3)
+    if res and res.get("post_html"):
+        res["post_html"] = clean_post_html(res["post_html"], source_name="Yahoo Finance / MarketPulse")
+    return res
 
 
 DAILY_CLOSE_PROMPT = """Sen MARKETPULSE tahlilchisisan.
@@ -251,10 +284,12 @@ Quyidagi tuzilishda bitta Telegram post yoz (o'zbek tilida, lotin yozuvida, Tele
 • Bitcoin: [narx]
 
 📌 <b>Kunning asosiy drayveri:</b> 1-2 jumla (nima sababdan bozor ko'tarildi yoki tushdi).
-💡 <b>Investor uchun ma’nosi:</b> 1-2 jumla xulosa.
+
+<i>Manba: NYSE, NASDAQ, CME / MarketPulse</i>
 
 Qat'iy qoidalar:
 - Faqat yuqoridagi aniq raqamlarni ishlat, narxlarni to'qima.
+- "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA (olib tashlangan).
 - Agar biror ko'rsatkich ro'yxatda bo'lmasa, uni yozma.
 JSON: {{"post_html": "...", "summary_uz": "Kunlik bozor yakunlari: asosiy indekslar va xomashyo harakati.", "card_title": "Bozor yakunlari", "card_points": ["S&P 500: ...", "Nasdaq: ...", "Brent: ..."], "photo_query": "New York Stock Exchange trading floor"}}
 """
@@ -270,7 +305,10 @@ def write_daily_close(indices, headlines):
         indices="\n".join(f"- {i['name']}: {i['price']} ({i['change']})" for i in indices),
         headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
     )
-    return _call(prompt, temperature=0.3)
+    res = _call(prompt, temperature=0.3)
+    if res and res.get("post_html"):
+        res["post_html"] = clean_post_html(res["post_html"], source_name="NYSE, NASDAQ, CME / MarketPulse")
+    return res
 
 
 SECTOR_ETF_PROMPT = """Sen MARKETPULSE tahlilchisisan.
@@ -292,9 +330,13 @@ Telegram post yoz (o'zbek, lotin, HTML: <b>, <i>). 950 belgidan oshmasin:
 🔴 <b>Orqada qolgan sektorlar:</b>
 • [Eng ko'p pasaygan 3-4 sektor nomi va % o'zgarishi]
 
-💡 <b>Sektorlar rotatsiyasi va investor uchun tahlil:</b>
-2-3 jumla: kapital qayerga oqmoqda (masalan: mudofaa sektorlarimi yoki texnologiyagami), investor qaysi trendni kuzatishi kerak.
+📊 <b>Sektorlar rotatsiyasi tahlili:</b>
+2-3 jumla: kapital qayerga oqmoqda (mudofaa sektorlarimi yoki texnologiyagami).
 
+<i>Manba: S&P Dow Jones Indices / SPDR</i>
+
+Qat'iy qoidalar:
+- "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA (olib tashlangan).
 JSON: {{"post_html": "...", "summary_uz": "Sektor ETFlari haftalik/kunlik rotatsiya tahlili.", "card_title": "Sektor ETFlari", "card_points": ["Yetakchi: ...", "Tushuvchi: ..."], "photo_query": "Wall Street stock exchange floor"}}
 """
 
@@ -309,7 +351,10 @@ def write_sector_etfs(sectors, headlines):
         sectors="\n".join(f"- {s['name']} ({s['symbol']}): ${s['price']} ({s['change_desc']})" for s in sectors),
         headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
     )
-    return _call(prompt, temperature=0.3)
+    res = _call(prompt, temperature=0.3)
+    if res and res.get("post_html"):
+        res["post_html"] = clean_post_html(res["post_html"], source_name="S&P Dow Jones Indices / SPDR")
+    return res
 
 
 CRYPTO_PULSE_PROMPT = """Sen MARKETPULSE tahlilchisisan.
@@ -330,8 +375,11 @@ Telegram post yoz (o'zbek, lotin, HTML: <b>, <i>). 900 belgidan oshmasin:
 • Solana va boshqa altcoinlar harakati
 
 📌 <b>Bozor omillari:</b> ETF oqimlari, likvidlik yoki regulyatsiya yangiliklari.
-💡 <b>Investor uchun ma’nosi:</b> 1-2 jumla aniq bozor xulosasi.
 
+<i>Manba: CoinMarketCap, Yahoo Finance / MarketPulse</i>
+
+Qat'iy qoidalar:
+- "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA (olib tashlangan).
 JSON: {{"post_html": "...", "summary_uz": "Bitcoin va kripto bozori sharhi.", "card_title": "Kripto Pulse", "card_points": ["Bitcoin: ...", "Ethereum: ..."], "photo_query": "Bitcoin cryptocurrency blockchain"}}
 """
 
@@ -346,7 +394,10 @@ def write_crypto_pulse(cryptos, headlines):
         cryptos="\n".join(f"- {c['name']} ({c['symbol']}): ${c['price']} ({c['change_desc']})" for c in cryptos),
         headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
     )
-    return _call(prompt, temperature=0.3)
+    res = _call(prompt, temperature=0.3)
+    if res and res.get("post_html"):
+        res["post_html"] = clean_post_html(res["post_html"], source_name="CoinMarketCap, Yahoo Finance / MarketPulse")
+    return res
 
 
 WEEKLY_GAZETTE_PROMPT = """Sen MARKETPULSE bosh tahlilchisisan.
@@ -374,9 +425,10 @@ Indekslar, xomashyo va obligatsiyalar yakuniy holati.
 4️⃣ <b>KEYINGI HAFTA REJASI:</b>
 Kelayotgan haftada kutilayotgan muhim iqtisodiy voqealar.
 
-💡 <b>INVESTOR UCHUN SIGNAL:</b>
-Kelgusi hafta uchun asosiy xatarlar va imkoniyatlar.
+<i>Manba: Bloomberg, Reuters, Wall Street Journal</i>
 
+Qat'iy qoidalar:
+- "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA (olib tashlangan).
 JSON: {{"post_html": "...", "summary_uz": "Haftalik bozor sarhisobi va kelgusi hafta rejalari.", "card_title": "Haftalik Gazeta", "card_points": ["Hafta yakunlari", "Asosiy signallar", "Kelgusi hafta"], "photo_query": "New York Stock Exchange traders floor"}}
 """
 
@@ -391,4 +443,7 @@ def write_weekly_gazette(indices, headlines):
         market_data="\n".join(f"- {i['name']}: {i['price']} ({i['change']})" for i in indices),
         headlines="\n".join(f"- {h}" for h in headlines[:30]) or "(yo'q)",
     )
-    return _call(prompt, temperature=0.3)
+    res = _call(prompt, temperature=0.3)
+    if res and res.get("post_html"):
+        res["post_html"] = clean_post_html(res["post_html"], source_name="Bloomberg, Reuters, Wall Street Journal")
+    return res

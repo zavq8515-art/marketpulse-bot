@@ -78,8 +78,10 @@ POST FORMATI:
 📊 <b>Real keys:</b>
 [Tarixiy yoki real kompaniya misoli]
 
-💡 <b>Investor uchun oltin qoida:</b>
+💡 <b>Oltin qoida:</b>
 [1-2 jumla xulosa]
+
+<i>Manba: MarketPulse Akademiya</i>
 
 JSON formatida qaytar:
 {{"post_html": "...", "summary_uz": "...", "card_title": "{title}", "card_points": ["Termin 1", "Termin 2", "Asosiy qoida"], "photo_query": "{photo_query}"}}
@@ -120,8 +122,10 @@ def generate_lesson_post(lesson_data: dict) -> dict:
 📊 <b>Real keys:</b>
 {lesson_data['case_study']}
 
-💡 <b>Investor uchun oltin qoida:</b>
+💡 <b>Oltin qoida:</b>
 {lesson_data['golden_rule']}
+
+<i>Manba: MarketPulse Akademiya</i>
 """
         return {
             "post_html": html.strip(),
@@ -130,6 +134,12 @@ def generate_lesson_post(lesson_data: dict) -> dict:
             "card_points": [t[0] for t in lesson_data.get("terms", [])[:3]],
             "photo_query": lesson_data.get("photo_query", "Wall Street financial stock market"),
         }
+
+    # Postni tekshirish: Manba bo'lishi shart
+    html = res["post_html"]
+    if "manba" not in html.lower():
+        html += "\n\n<i>Manba: MarketPulse Akademiya</i>"
+    res["post_html"] = html.strip()
     return res
 
 

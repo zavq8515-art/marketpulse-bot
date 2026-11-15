@@ -58,6 +58,17 @@ def in_quiet_hours():
 
 
 def publish(html_text, image_bytes, label):
+    # Har qanday postdan "Investor uchun ma'nosi" bo'limini butunlay olib tashlash
+    import re
+    pattern = r"(?:💡\s*)?(?:<blockquote>\s*)?(?:<b>\s*)?(?:💡\s*)?(?:Investor\s+uchun\s+ma[’'‘`]nosi:?)\s*(?:</b>)?.*?(?=(?:<i>\s*Manba|</blockquote>|\Z))"
+    html_text = re.sub(pattern, "", html_text, flags=re.DOTALL | re.IGNORECASE).strip()
+    html_text = re.sub(r"<blockquote>\s*</blockquote>", "", html_text).strip()
+    html_text = re.sub(r"\n{3,}", "\n\n", html_text).strip()
+
+    # Manba doim bo'lishini ta'minlash
+    if "manba" not in html_text.lower():
+        html_text += "\n\n<i>Manba: MarketPulse</i>"
+
     if DRY_RUN:
         PREVIEW_DIR.mkdir(exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

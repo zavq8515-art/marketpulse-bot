@@ -43,6 +43,11 @@ def init():
                 posted_at TEXT,
                 PRIMARY KEY (feature, period_key)
             );
+            CREATE TABLE IF NOT EXISTS used_images (
+                image_hash TEXT PRIMARY KEY,
+                url TEXT,
+                posted_at TEXT
+            );
             """
         )
 
@@ -144,4 +149,28 @@ def mark_feature_done(feature, period_key):
         c.execute(
             "INSERT OR IGNORE INTO scheduled_features (feature, period_key, posted_at) VALUES (?,?,?)",
             (feature, period_key, now_utc().isoformat()),
+        )
+
+
+def is_image_recent(image_hash: str, days: int = 3) -> bool:
+    """Surat heshi oxirgi `days` kun ichida ishlatilganligini tekshiradi."""
+    if not image_hash:
+        return False
+    cutoff = (now_utc() - timedelta(days=days)).isoformat()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT 1 FROM used_images WHERE image_hash=? AND posted_at >= ?",
+            (image_hash, cutoff),
+        ).fetchone()
+        return bool(row)
+
+
+def record_used_image(image_hash: str, url: str = ""):
+    """Ishlatilgan surat heshini bazada qayd etadi."""
+    if not image_hash:
+        return
+    with _conn() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO used_images (image_hash, url, posted_at) VALUES (?,?,?)",
+            (image_hash, url or "", now_utc().isoformat()),
         )

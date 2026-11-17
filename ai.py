@@ -97,11 +97,11 @@ def triage(items, recent):
     now = datetime.now(TASHKENT).strftime("%Y-%m-%d %H:%M")
     recent_txt = "\n".join(f"- [{p['topic']}] {p['summary']}" for p in recent) or "(hali post yo'q)"
     selected = []
-    # Har bir tekshiruvda eng yangi 40 ta xabarni 20 tadan bo'lib tahlil qilamiz
-    items = sorted(items, key=lambda x: x.get("published") or "", reverse=True)[:40]
+    # Eng yangi 40 ta xabarni saralaymiz
+    sorted_items = sorted(items, key=lambda x: x.get("published") or "", reverse=True)[:40]
     any_ok = False
-    for start in range(0, len(items), 20):
-        chunk = items[start : start + 20]
+    for start in range(0, len(sorted_items), 20):
+        chunk = sorted_items[start : start + 20]
         items_txt = "\n".join(
             f"{start + i}. [{it['source']}{' (RASMIY)' if it['official'] else ''}] {it['title']} — {it['summary'][:160]}"
             for i, it in enumerate(chunk)
@@ -109,8 +109,22 @@ def triage(items, recent):
         res = _call(TRIAGE_PROMPT.format(now=now, recent=recent_txt, items=items_txt), temperature=0.1)
         if res is not None:
             any_ok = True
-            if isinstance(res.get("selected"), list):
-                selected.extend(res["selected"])
+            for sel in res.get("selected", []):
+                idx = sel.get("index")
+                if not isinstance(idx, int):
+                    continue
+                # Agar model 0-dan boshlab nisbiy indeks qaytargan bo'lsa (0..19), uni start bilan to'g'rilaymiz
+                if 0 <= idx < len(chunk) and start > 0 and idx < start:
+                    idx = start + idx
+                if 0 <= idx < len(sorted_items):
+                    sel_item = sorted_items[idx]
+                    selected.append({
+                        "item": sel_item,
+                        "topic": (sel.get("topic") or "").strip().lower(),
+                        "importance": sel.get("importance", 5),
+                        "novelty": sel.get("novelty", 5),
+                        "reason": sel.get("reason", ""),
+                    })
     return selected if any_ok else None
 
 
@@ -313,7 +327,7 @@ Javobni faqat JSON ko'rinishida qaytar:
   "card_title": "<surat kartasi uchun 3-7 so'zli sarlavha, o'zbekcha>",
   "card_points": ["<kartada ko'rsatiladigan 0-3 ta qisqa raqamli fakt, masalan 'S&P 500: −1.2%'. Raqam bo'lmasa bo'sh ro'yxat>"],
   "category": "<bittasi: MARKETS, MACRO, FED, BONDS, FOREX, COMMODITIES, GEOPOLITICS, CRYPTO, COMPANY, TECH>",
-  "photo_query": "<maqoladagi asosiy kompaniya, shaxs, mahsulot yoki birja nomi ingliz tilida, Wikipedia'dan haqiqiy suratini topish uchun: masalan 'Nvidia', 'Jensen Huang', 'Boeing 737', 'New York Stock Exchange', 'Federal Reserve Eccles Building', 'Crude oil tanker'>"
+  "photo_query": "<MAQOLANING AYNAN O'ZIGA XOS ASOSIY SUB'EKTI (ingliz tilida). HECH QACHON umumiy yoki takroriy nom yozma! Qoidalar: Shaxs bo'lsa: to'liq ismi (masalan 'Jerome Powell', 'Donald Trump', 'Tim Cook'); Aniq kompaniya/mahsulot bo'lsa: 'Boeing 737 Max airplane', 'Tesla Cybertruck', 'Apple Store flagship'; Bozor/Makro bo'lsa: 'New York Stock Exchange floor', 'Federal Reserve Eccles Building', 'United States Capitol'; Xomashyo: 'Crude oil tanker ship', 'Gold bullion vault'; Kripto: 'Bitcoin cryptocurrency coin'. Faqat va faqat SHU maqolaning o'ziga xos fotosini topishga qaratilgan aniq inglizcha ibora yoz.>"
 }}
 """
 

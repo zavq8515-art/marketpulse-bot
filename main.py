@@ -129,8 +129,12 @@ def process_news(budget):
 
     chosen, seen_topics = [], set()
     for s in sorted(selected, key=lambda x: -(x.get("importance", 0) * x.get("novelty", 0))):
-        idx = s.get("index")
-        if not isinstance(idx, int) or not 0 <= idx < len(items):
+        item = s.get("item")
+        if not item:
+            idx = s.get("index")
+            if isinstance(idx, int) and 0 <= idx < len(items):
+                item = items[idx]
+        if not item:
             continue
         topic = (s.get("topic") or "").strip().lower()
         if s.get("importance", 0) < MIN_IMPORTANCE or s.get("novelty", 0) < MIN_NOVELTY:
@@ -138,7 +142,7 @@ def process_news(budget):
         if topic in recent_topics or topic in seen_topics:
             continue
         seen_topics.add(topic)
-        chosen.append((items[idx], s, topic))
+        chosen.append((item, s, topic))
 
     chosen_ids = {c[0]["id"] for c in chosen}
     for it in items:  # tanlanmaganlar qayta tahlil qilinmasin

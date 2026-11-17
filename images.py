@@ -1,4 +1,5 @@
 """Post uchun surat: haqiqiy foto (maqola/Wikipedia/Wikimedia) + MARKETPULSE watermark."""
+import hashlib
 import io
 import logging
 import os
@@ -7,6 +8,7 @@ from datetime import datetime
 import requests
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+import db
 from config import ASSETS_DIR, TASHKENT, USER_AGENT
 
 log = logging.getLogger("images")
@@ -124,7 +126,13 @@ def _watermark_photo(im: Image.Image) -> bytes:
 WIKI_HEADERS = {"User-Agent": "MarketPulseBot/1.0 (https://t.me/MarketPulseZK; marketpulse@bot.local)"}
 
 
-def _download_valid_photo(url: str):
+def _get_photo_hash(im: Image.Image) -> str:
+    """Kichik 16x16 o'lchamga keltirib, tasvirning perceptual heshini hisoblaydi."""
+    small = im.convert("L").resize((16, 16), Image.Resampling.BILINEAR)
+    return hashlib.md5(small.tobytes()).hexdigest()
+
+
+def _download_valid_photo(url: str, check_recent: bool = False):
     if not url or any(p in url.lower() for p in BAD_IMAGE_PATTERNS):
         return None
     if url.lower().split("?")[0].endswith((".svg", ".gif")):
@@ -136,15 +144,35 @@ def _download_valid_photo(url: str):
         im = Image.open(io.BytesIO(r.content))
         if im.width < 450 or im.height < 250:
             return None
-        return _watermark_photo(im)
+
+        im_hash = _get_photo_hash(im)
+        if check_recent and db.is_image_recent(im_hash):
+            log.info("Surat yaqinda ishlatilgan, o'tkazib yuboriladi: %s (%s)", im_hash, url[:60])
+            return None
+
+        wm_bytes = _watermark_photo(im)
+        if check_recent:
+            return wm_bytes, im_hash
+        return wm_bytes
     except Exception as e:  # noqa: BLE001
         log.debug("Surat yuklanmadi (%s): %s", url, e)
         return None
 
 
-def _wiki_photo_url(query: str):
+def _wiki_photo_urls(query: str) -> list[str]:
+    """Berilgan so'rov bo'yicha Wikipedia va Wikimedia Commons'dan bir nechta sifatli suratlar ro'yxatini qaytaradi."""
     if not query:
-        return None
+        return []
+    candidates = []
+    seen = set()
+
+    def add(u):
+        if u and u not in seen and not any(p in u.lower() for p in BAD_IMAGE_PATTERNS):
+            if not u.lower().split("?")[0].endswith((".svg", ".gif")) and "logo" not in u.lower():
+                seen.add(u)
+                candidates.append(u)
+
+    # 1. Wikipedia Search
     try:
         r = requests.get(
             "https://en.wikipedia.org/w/api.php",
@@ -152,7 +180,7 @@ def _wiki_photo_url(query: str):
                 "action": "query",
                 "generator": "search",
                 "gsrsearch": query,
-                "gsrlimit": 5,
+                "gsrlimit": 8,
                 "prop": "pageimages",
                 "piprop": "original",
                 "format": "json",
@@ -165,17 +193,12 @@ def _wiki_photo_url(query: str):
             orig = p.get("original", {})
             src = orig.get("source", "")
             w, h = orig.get("width", 0), orig.get("height", 0)
-            if (
-                src
-                and w >= 500
-                and h >= 300
-                and not src.lower().endswith((".svg", ".gif"))
-                and "logo" not in src.lower()
-            ):
-                return src
+            if src and w >= 500 and h >= 300:
+                add(src)
     except Exception:  # noqa: BLE001
         pass
 
+    # 2. Wikimedia Commons Search
     try:
         r = requests.get(
             "https://commons.wikimedia.org/w/api.php",
@@ -184,7 +207,7 @@ def _wiki_photo_url(query: str):
                 "generator": "search",
                 "gsrsearch": f"filetype:bitmap {query}",
                 "gsrnamespace": 6,
-                "gsrlimit": 6,
+                "gsrlimit": 10,
                 "prop": "imageinfo",
                 "iiprop": "url|dimensions",
                 "format": "json",
@@ -200,17 +223,17 @@ def _wiki_photo_url(query: str):
                 w, h = ii.get("width", 0), ii.get("height", 0)
                 if landscape_only and w < h:
                     continue
-                if (
-                    src
-                    and w >= 600
-                    and h >= 350
-                    and not src.lower().endswith((".svg", ".gif"))
-                    and "logo" not in src.lower()
-                ):
-                    return src
+                if src and w >= 600 and h >= 350:
+                    add(src)
     except Exception:  # noqa: BLE001
         pass
-    return None
+
+    return candidates
+
+
+def _wiki_photo_url(query: str):
+    urls = _wiki_photo_urls(query)
+    return urls[0] if urls else None
 
 
 def brand_card(title, points=None, category="MARKETS"):
@@ -265,26 +288,36 @@ def brand_card(title, points=None, category="MARKETS"):
 
 def pick_image(article, post):
     """1) Maqolaning haqiqiy fotosi, 2) Kompaniya/mavzu bo'yicha Wikipedia fotosi, 3) Kategoriya fotosi."""
-    # 1. Maqolaning o'zidagi haqiqiy foto (CNBC, AP, Reuters, CoinDesk va h.k.)
-    img = _download_valid_photo(article.get("image"))
-    if img:
-        return img
+    # 1. Maqolaning o'zidagi haqiqiy foto (CNBC, AP, Reuters, CoinDesk, MarketWatch va h.k.)
+    art_img = article.get("image")
+    if art_img:
+        res = _download_valid_photo(art_img, check_recent=True)
+        if res:
+            img_bytes, im_hash = res
+            db.record_used_image(im_hash, art_img)
+            return img_bytes
 
-    # 2. AI aniqlagan kompaniya / shaxs / birja bo'yicha haqiqiy foto
+    # 2. AI aniqlagan kompaniya / shaxs / birja bo'yicha haqiqiy foto (bir nechta nomzod tekshiriladi)
     query = post.get("photo_query")
     if query:
-        img = _download_valid_photo(_wiki_photo_url(query))
-        if img:
-            return img
+        for candidate_url in _wiki_photo_urls(query):
+            res = _download_valid_photo(candidate_url, check_recent=True)
+            if res:
+                img_bytes, im_hash = res
+                db.record_used_image(im_hash, candidate_url)
+                return img_bytes
 
     # 3. Kategoriya bo'yicha mavzuga mos haqiqiy foto (NYSE, Data Center, Fed binosi va h.k.)
     cat = post.get("category", "MARKETS")
     fallback_q = CATEGORY_DEFAULT_QUERIES.get(cat, "New York Stock Exchange trading floor")
-    img = _download_valid_photo(_wiki_photo_url(fallback_q))
-    if img:
-        return img
+    for candidate_url in _wiki_photo_urls(fallback_q):
+        res = _download_valid_photo(candidate_url, check_recent=True)
+        if res:
+            img_bytes, im_hash = res
+            db.record_used_image(im_hash, candidate_url)
+            return img_bytes
 
-    # 4. Eng oxirgi chora
+    # 4. Eng oxirgi chora: brend karta
     return brand_card(
         post.get("card_title") or "Bozor yangiligi",
         [p for p in post.get("card_points", []) if p][:3],
@@ -368,11 +401,12 @@ def pick_academy_image(lesson_id: int, lesson_data: dict, post: dict):
     """Akademiya darsi uchun: haqiqiy mavzuli foto yoki maxsus akademiya kartasi."""
     query = post.get("photo_query") or lesson_data.get("photo_query")
     if query:
-        url = _wiki_photo_url(query)
-        if url:
-            img = _download_valid_photo(url)
-            if img:
-                return img
+        for url in _wiki_photo_urls(query):
+            res = _download_valid_photo(url, check_recent=True)
+            if res:
+                img_bytes, im_hash = res
+                db.record_used_image(im_hash, url)
+                return img_bytes
     # Agar foto topilmasa, oltin ramkali maxsus akademiya kartasini yaratadi
     points = post.get("card_points") or [t[0] for t in lesson_data.get("terms", [])[:3]]
     return academy_card(
@@ -387,9 +421,10 @@ def fetch_topic_photo(query: str):
     """Wikipedia/Wikimedia'dan qidirib, suv belgisi qo'yilgan haqiqiy suratni qaytaradi."""
     if not query:
         return None
-    url = _wiki_photo_url(query)
-    if url:
-        return _download_valid_photo(url)
+    for url in _wiki_photo_urls(query):
+        res = _download_valid_photo(url, check_recent=False)
+        if res:
+            return res
     return None
 
 

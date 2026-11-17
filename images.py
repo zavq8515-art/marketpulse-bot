@@ -382,3 +382,103 @@ def pick_academy_image(lesson_id: int, lesson_data: dict, post: dict):
         points=points,
     )
 
+
+def fetch_topic_photo(query: str):
+    """Wikipedia/Wikimedia'dan qidirib, suv belgisi qo'yilgan haqiqiy suratni qaytaradi."""
+    if not query:
+        return None
+    url = _wiki_photo_url(query)
+    if url:
+        return _download_valid_photo(url)
+    return None
+
+
+def company_metrics_card(symbol: str, name: str, price: float, change_desc: str, market_cap: str, range_52w: str, sector: str):
+    """Kompaniya profili va moliyaviy ko'rsatkichlari kartasi (infografika)."""
+    img = Image.new("RGB", (W, H))
+    d = ImageDraw.Draw(img)
+    for y in range(H):
+        t = y / H
+        d.line(
+            [(0, y), (W, y)],
+            fill=tuple(int(NAVY_TOP[i] + (NAVY_BOTTOM[i] - NAVY_TOP[i]) * t) for i in range(3)),
+        )
+    for x in range(0, W, 80):
+        d.line([(x, 0), (x, H)], fill=(16, 36, 75), width=1)
+    for y in range(0, H, 80):
+        d.line([(0, y), (W, y)], fill=(16, 36, 75), width=1)
+
+    # Yuqori chiziq (Cyan)
+    d.rectangle([0, 0, W, 6], fill=CYAN)
+
+    # Badge: KOMPANIYA PROFILI
+    badge_txt = "🏢 KOMPANIYA PROFILI"
+    f_badge = _font(24, bold=True)
+    bw = d.textlength(badge_txt, font=f_badge) + 32
+    d.rounded_rectangle([60, 42, 60 + bw, 84], radius=8, fill=CYAN)
+    d.text((76, 50), badge_txt, font=f_badge, fill=NAVY_TOP)
+
+    # Sektor pill
+    if sector:
+        f_sec = _font(20, bold=False)
+        sw = d.textlength(sector, font=f_sec) + 28
+        d.rounded_rectangle([60 + bw + 14, 44, 60 + bw + 14 + sw, 84], radius=8, outline=(40, 120, 255), width=2, fill=(10, 30, 65))
+        d.text((60 + bw + 28, 53), sector, font=f_sec, fill=(200, 220, 255))
+
+    # Sarlavha: #SYMBOL • NAME
+    f_title = _font(48, bold=True)
+    title_text = f"#{symbol} • {name.upper()}"
+    lines = _wrap(d, title_text, f_title, W - 120)
+    if len(lines) > 2:
+        f_title = _font(38, bold=True)
+        lines = _wrap(d, title_text, f_title, W - 120)[:2]
+    y = 110
+    for line in lines:
+        d.text((60, y), line, font=f_title, fill=WHITE)
+        y += f_title.size + 10
+
+    # Narx bloki
+    f_price = _font(42, bold=True)
+    price_txt = f"${price:.2f}" if price else "—"
+    is_positive = not change_desc.startswith("-")
+    price_color = (0, 230, 120) if is_positive else (255, 80, 80)
+    d.text((60, y + 10), price_txt, font=f_price, fill=WHITE)
+    pw = d.textlength(price_txt, font=f_price)
+    f_chg = _font(30, bold=True)
+    d.text((60 + pw + 16, y + 20), f"({change_desc})", font=f_chg, fill=price_color)
+
+    # 4 ta ko'rsatkich qutisi (Grid)
+    box_y = y + 75
+    boxes = [
+        ("BOZOR QIYMATI", market_cap),
+        ("52 HAFTALIK DIAPAZON", range_52w),
+        ("KAPITALIZATSIYA", "> $2B (Large Cap)"),
+        ("ASOSIY SEKTOR", sector[:24]),
+    ]
+    box_w = (W - 120 - 24) // 2
+    box_h = 95
+    for idx, (label, val) in enumerate(boxes):
+        bx = 60 + (idx % 2) * (box_w + 24)
+        by = box_y + (idx // 2) * (box_h + 14)
+        if by + box_h > H - 90:
+            continue
+        d.rounded_rectangle([bx, by, bx + box_w, by + box_h], radius=10, fill=(10, 26, 56), outline=(25, 55, 110), width=1)
+        d.text((bx + 18, by + 16), label, font=_font(18, bold=True), fill=GREY)
+        d.text((bx + 18, by + 46), val, font=_font(26, bold=True), fill=CYAN)
+
+    # Pastki brend chiziq
+    d.line([(60, H - 85), (W - 60, H - 85)], fill=(30, 60, 110), width=2)
+    f_brand = _font(34, bold=True)
+    d.text((60, H - 68), "MARKETPULSE", font=f_brand, fill=WHITE)
+    f_sub = _font(22, bold=False)
+    d.text((60 + d.textlength("MARKETPULSE", font=f_brand) + 16, H - 60), "• Kompaniya Tahlili & Fundamental Ko‘rsatkichlar", font=f_sub, fill=CYAN)
+
+    channel_txt = "t.me/MarketPulseZK"
+    f_chan = _font(24, bold=True)
+    d.text((W - 60 - d.textlength(channel_txt, font=f_chan), H - 62), channel_txt, font=f_chan, fill=WHITE)
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
+
+

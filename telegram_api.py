@@ -47,6 +47,38 @@ def send_post(html_text, image_bytes=None):
     )
 
 
+def send_media_group(html_text, images_list):
+    """Bir nechta suratni (kompaniya binosi, mahsuloti, grafik va h.k.) bitta albom qilib yuboradi."""
+    if not images_list:
+        return send_post(html_text)
+    if len(images_list) == 1:
+        return send_post(html_text, images_list[0])
+
+    import json
+    media = []
+    files = {}
+    for idx, img_bytes in enumerate(images_list[:4]):  # 2-4 ta surat optimal
+        attach_name = f"photo_{idx}"
+        item = {"type": "photo", "media": f"attach://{attach_name}"}
+        if idx == 0:
+            # Albomning birinchi suratiga sarlavha va matn biriktiriladi
+            if _visible_len(html_text) <= CAPTION_LIMIT:
+                item["caption"] = html_text
+                item["parse_mode"] = "HTML"
+        media.append(item)
+        files[attach_name] = (f"{attach_name}.jpg", img_bytes, "image/jpeg")
+
+    res = _api(
+        "sendMediaGroup",
+        data={"chat_id": TELEGRAM_CHANNEL, "media": json.dumps(media)},
+        files=files,
+    )
+    # Agar matn 1024 belgidan oshib birinchi suratga sig'magan bo'lsa, alohida xabar qilib jo'natiladi
+    if _visible_len(html_text) > CAPTION_LIMIT:
+        send_post(html_text)
+    return res
+
+
 def check():
     """Token va kanal huquqlarini tekshiradi."""
     me = _api("getMe")

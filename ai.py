@@ -114,10 +114,125 @@ def triage(items, recent):
     return selected if any_ok else None
 
 
+TICKER_MAP = {
+    # Mega-cap Tech
+    "apple": "AAPL",
+    "tesla": "TSLA",
+    "nvidia": "NVDA",
+    "microsoft": "MSFT",
+    "alphabet": "GOOGL",
+    "google": "GOOGL",
+    "amazon": "AMZN",
+    "meta": "META",
+    "facebook": "META",
+    # Semiconductors
+    "tsmc": "TSM",
+    "taiwan semiconductor": "TSM",
+    "broadcom": "AVGO",
+    "asml": "ASML",
+    "amd": "AMD",
+    "advanced micro devices": "AMD",
+    "qualcomm": "QCOM",
+    "intel": "INTC",
+    "applied materials": "AMAT",
+    "lam research": "LRCX",
+    "synopsys": "SNPS",
+    "cadence": "CDNS",
+    "kla": "KLAC",
+    "arm": "ARM",
+    "micron": "MU",
+    "super micro": "SMCI",
+    "smci": "SMCI",
+    # Software & Cloud
+    "adobe": "ADBE",
+    "salesforce": "CRM",
+    "oracle": "ORCL",
+    "servicenow": "NOW",
+    "intuit": "INTU",
+    "palo alto": "PANW",
+    "crowdstrike": "CRWD",
+    "snowflake": "SNOW",
+    "palantir": "PLTR",
+    "cisco": "CSCO",
+    "arista": "ANET",
+    # Healthcare & Biotech
+    "eli lilly": "LLY",
+    "lilly": "LLY",
+    "johnson & johnson": "JNJ",
+    "abbott": "ABT",
+    "thermo fisher": "TMO",
+    "danaher": "DHR",
+    "intuitive surgical": "ISRG",
+    "stryker": "SYK",
+    "vertex": "VRTX",
+    "regeneron": "REGN",
+    "pfizer": "PFE",
+    "astrazeneca": "AZN",
+    "novartis": "NVS",
+    "novo nordisk": "NVO",
+    "zoetis": "ZTS",
+    # Industrials & Auto
+    "caterpillar": "CAT",
+    "deere": "DE",
+    "john deere": "DE",
+    "eaton": "ETN",
+    "honeywell": "HON",
+    "boeing": "BA",
+    "general electric": "GE",
+    "uber": "UBER",
+    "ford": "F",
+    "general motors": "GM",
+    "rivian": "RIVN",
+    # Consumer & Retail
+    "walmart": "WMT",
+    "costco": "COST",
+    "procter & gamble": "PG",
+    "nike": "NKE",
+    "starbucks": "SBUX",
+    "disney": "DIS",
+    # Energy
+    "exxon": "XOM",
+    "exxonmobil": "XOM",
+    "chevron": "CVX",
+    # Financial & Crypto
+    "coinbase": "COIN",
+    "robinhood": "HOOD",
+    "berkshire": "BRK",
+}
+
+
+def inject_ticker_hashtags(html: str) -> str:
+    """Postda kompaniya nomi uchrasa va uning #TIKER heshtegi hali bo'lmasa, avtomatik qo'shadi."""
+    if not html:
+        return html
+    lower_html = html.lower()
+    found_tickers = []
+    for name, ticker in TICKER_MAP.items():
+        pattern = rf"\b{re.escape(name)}\b"
+        if re.search(pattern, lower_html):
+            hashtag = f"#{ticker}"
+            if hashtag.lower() not in lower_html:
+                found_tickers.append(hashtag)
+
+    if not found_tickers:
+        return html
+
+    unique_tickers = list(dict.fromkeys(found_tickers))
+    tickers_str = " ".join(unique_tickers)
+
+    if "<i>manba" in lower_html:
+        html = re.sub(r"(<i>\s*Manba)", f"{tickers_str}\n\n\\1", html, count=1, flags=re.IGNORECASE)
+    else:
+        html += f"\n\n{tickers_str}"
+
+    return html.strip()
+
+
 def clean_post_html(html: str, source_name: str = "", url: str = "") -> str:
     """Post matnini tozalash:
     1. 'Investor uchun ma'nosi' bo'limini olib tashlaydi.
-    2. 'Manba' qatori doim mavjud bo'lishini 100% kafolatlaydi.
+    2. Kompaniya tilga olingan bo'lsa, #TIKER heshtegini ta'minlaydi.
+    3. 'Manba' qatori doim mavjud bo'lishini 100% kafolatlaydi.
     """
     if not html:
         return html
@@ -130,7 +245,10 @@ def clean_post_html(html: str, source_name: str = "", url: str = "") -> str:
     # Bo'sh qatorlarni ixchamlashtirish
     html = re.sub(r"\n{3,}", "\n\n", html).strip()
 
-    # 2. 'Manba' doim bo'lishini ta'minlash
+    # 2. Kompaniya aksiya tiker heshteglarini ta'minlash (#TSLA, #NVDA va h.k.)
+    html = inject_ticker_hashtags(html)
+
+    # 3. 'Manba' doim bo'lishini ta'minlash
     if "manba" not in html.lower():
         if source_name and url:
             html += f'\n\n<i>Manba: <a href="{url}">{source_name}</a></i>'
@@ -152,13 +270,14 @@ QAT'IY QOIDALAR:
 - Faqat o'zbek tilida, LOTIN yozuvida (o' g' sh ch harflari to'g'ri: o‘, g‘).
 - HECH QANDAY raqam, narx, foiz yoki faktni to'qib chiqarma. Faqat maqolada bor ma'lumotni ishlat.
   Maqolada raqam bo'lmasa, raqam yozma.
+- Agar biror kompaniya yoki aksiya tilga olinsa, ALBATTA uning birja tikerini heshteg formatida ko'rsat (masalan: #TSLA, #AAPL, #NVDA, #MSFT, #AMZN, #GOOGL). Sarlavhada yoki post matnida tiker heshtegi bo'lsin.
 - Narx qaysi vaqtga tegishli ekanini aniq yoz (yopilish narxi / intraday / premarket / after-hours), agar maqolada bor bo'lsa.
 - Vaqtlarni Toshkent vaqtida ber (ET dan aylantirsang, aynan shu sanadagi farqni hisobga ol).
 - Tasdiqlanmagan xabar bo'lsa "xabarlarga ko‘ra" / "manbalarga ko‘ra" deb yoz, fakt sifatida berma.
 - Moliyaviy terminni inglizcha qoldirsang, birinchi marta qavs ichida qisqa izoh ber (masalan: EPS (aksiya boshiga foyda)).
 - "Investor uchun ma'nosi" degan bo'lim yoki jumlani UMUMAN YOZMA (olib tashlangan). Yangilik tafsilotlari va raqamlarni aniq va lo'nda tushuntir.
 - Har bir post oxirida DOIM manba ko'rsatilsin: <i>Manba: <a href="{url}">{source}</a></i>. Manbani aslo tushirib qoldirma!
-- Shaxs yoki kompaniya tilga olinsa, kimligini qisqa ayt (masalan: "NVIDIA bosh direktori Jensen Huang", "Fed raisi").
+- Shaxs yoki kompaniya tilga olinsa, kimligini qisqa ayt (masalan: "NVIDIA (#NVDA) bosh direktori Jensen Huang", "Fed raisi").
   O'quvchi kontekstsiz tushunmaydigan jumla yozma.
 - Qo'shimcha kontekst uchun "SHU MAVZUDAGI BOSHQA XABARLAR" bo'limidan ham foydalan (u yerdagi faktlar ham manba hisoblanadi).
 - AI qolipidagi so'zlardan qoch ("Ushbu maqolada", "Xulosa qilib aytganda", "muhim ahamiyatga ega" kabi). Tabiiy, qisqa yoz.
@@ -167,7 +286,11 @@ QAT'IY QOIDALAR:
 - post_html uzunligi 900 belgidan OSHMASIN (surat ostiga sig'ishi kerak).
 
 POST TUZILISHI (post_html):
-<emoji> <b>QISQA SARLAVHA KATTA HARFDA</b>
+<emoji> <b>QISQA SARLAVHA (#TIKER BILAN) KATTA HARFDA</b>
+
+2-4 qisqa jumla yoki 2-4 ta "•" bilan boshlanuvchi qator: nima bo'ldi, asosiy raqamlar, voqea tafsilotlari.
+
+<i>Manba: <a href="{url}">{source}</a></i>
 
 2-4 qisqa jumla yoki 2-4 ta "•" bilan boshlanuvchi qator: nima bo'ldi, asosiy raqamlar, voqea tafsilotlari.
 

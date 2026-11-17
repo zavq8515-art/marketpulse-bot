@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import ai
+import companies
 import db
 import education
 import fetcher
@@ -64,6 +65,9 @@ def publish(html_text, image_bytes, label):
     html_text = re.sub(pattern, "", html_text, flags=re.DOTALL | re.IGNORECASE).strip()
     html_text = re.sub(r"<blockquote>\s*</blockquote>", "", html_text).strip()
     html_text = re.sub(r"\n{3,}", "\n\n", html_text).strip()
+
+    # Kompaniyalar tilga olinganda aksiya tiker heshteglarini ta'minlash (#TSLA, #NVDA...)
+    html_text = ai.inject_ticker_hashtags(html_text)
 
     # Manba doim bo'lishini ta'minlash
     if "manba" not in html_text.lower():
@@ -303,6 +307,13 @@ def process_scheduled_features():
     if weekday in (5, 6):
         education.process_weekend_academy()
 
+    # 6. Kompaniyalar tahlili (haftada 2 marta: seshanba va payshanba 16:00-18:00 Toshkent vaqti)
+    if weekday in (1, 3) and 16 <= now.hour <= 18:
+        day_key = f"{week_key}_day_{weekday}"
+        if not db.is_feature_done("company_spotlight_sched", day_key):
+            if companies.publish_company_spotlight():
+                db.mark_feature_done("company_spotlight_sched", day_key)
+
 
 def run_once():
     if in_quiet_hours():
@@ -338,6 +349,9 @@ def main():
     p.add_argument("--lesson", type=int, help="Aniq dars ID raqamini chiqarish (1-100)")
     p.add_argument("--next-lesson", action="store_true", help="Navbatdagi akademiya darsini chiqarish")
     p.add_argument("--academy-status", action="store_true", help="Akademiya holatini ko'rish")
+    p.add_argument("--company", type=str, help="Aniq kompaniya aksiyasini tahlil qilib chiqarish (masalan: NVDA, AAPL, TSLA)")
+    p.add_argument("--company-spotlight", action="store_true", help="Navbatdagi yirik kompaniya tahlilini chiqarish")
+    p.add_argument("--companies-list", action="store_true", help="Tahlil qilinadigan yirik kompaniyalar ro'yxatini ko'rish")
     args = p.parse_args()
     db.init()
 
@@ -376,6 +390,18 @@ def main():
         print(f"Keyingi navbatdagi dars: #{next_id}")
         print(f"Modul: {l['module']}")
         print(f"Mavzu: {l['title']}")
+        return
+    if args.company:
+        companies.publish_company_spotlight(args.company.upper().strip())
+        return
+    if args.company_spotlight:
+        companies.publish_company_spotlight()
+        return
+    if args.companies_list:
+        print("\n🏢 MARKETPULSE — YIRIK KOMPANIYALAR REYESTRI (> $2B):")
+        for idx, c in enumerate(companies.COMPANIES_DB, 1):
+            done = "✅" if db.is_feature_done("company_spotlight", c["symbol"]) else "⏳"
+            print(f"{idx:2d}. {done} #{c['symbol']:<5} | {c['name']:<25} | {c['market_cap']:<15} | {c['sector']}")
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

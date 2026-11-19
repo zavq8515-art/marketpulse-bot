@@ -9,6 +9,56 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL
 log = logging.getLogger("telegram")
 API = "https://api.telegram.org/bot{token}/{method}"
 CAPTION_LIMIT = 1024
+CHANNEL_FOOTER = '📊 <b>MARKETPULSE</b> | <a href="https://t.me/MarketPulseZK">@MarketPulseZK</a>'
+
+SOURCE_LINKS = {
+    "yahoo finance": "https://finance.yahoo.com",
+    "nasdaq": "https://www.nasdaq.com",
+    "sec": "https://www.sec.gov/edgar/searchedgar/companysearch",
+    "federal reserve": "https://www.federalreserve.gov",
+    "bls": "https://www.bls.gov",
+    "cnbc": "https://www.cnbc.com",
+    "reuters": "https://www.reuters.com",
+    "bloomberg": "https://www.bloomberg.com",
+    "marketwatch": "https://www.marketwatch.com",
+    "coindesk": "https://www.coindesk.com",
+    "cnn": "https://edition.cnn.com/markets/fear-and-greed",
+    "forexfactory": "https://www.forexfactory.com/calendar",
+    "marketpulse": "https://t.me/MarketPulseZK",
+}
+
+
+def _ensure_source_and_footer(html_text: str) -> str:
+    """Har bir post ostida giperhavolali Manba va doimiy kanal havolasi (@MarketPulseZK) bo'lishini kafolatlaydi."""
+    if not html_text:
+        return html_text
+    text = html_text.strip()
+    low = text.lower()
+
+    # 1. Agar Manba qatori bor-u, lekin giperhavola (<a href) bo'lmasa — uni bosiladigan havolaga aylantirish
+    if "manba" in low:
+        def _linkify_manba(m):
+            full = m.group(0)
+            if "<a " in full.lower():
+                return full
+            inner = m.group(1).strip()
+            url = "https://finance.yahoo.com"
+            ilow = inner.lower()
+            for key, u in SOURCE_LINKS.items():
+                if key in ilow:
+                    url = u
+                    break
+            return f'<i>Manba: <a href="{url}">{inner}</a></i>'
+
+        text = re.sub(r"<i>\s*Manba:\s*([^<]+)</i>", _linkify_manba, text, flags=re.IGNORECASE)
+    else:
+        text += '\n\n<i>Manba: <a href="https://finance.yahoo.com">Yahoo Finance / MarketPulse</a></i>'
+
+    # 2. Doimiy kanal havolasi ostida bo'lishini ta'minlash (takrorlamasdan)
+    if "t.me/marketpulsezk" not in text.lower() and "@marketpulsezk" not in text.lower():
+        text += f"\n\n{CHANNEL_FOOTER}"
+
+    return text.strip()
 
 
 def _api(method, **kwargs):
@@ -24,6 +74,7 @@ def _visible_len(html_text):
 
 
 def send_post(html_text, image_bytes=None):
+    html_text = _ensure_source_and_footer(html_text)
     if image_bytes and _visible_len(html_text) <= CAPTION_LIMIT:
         return _api(
             "sendPhoto",
@@ -49,6 +100,7 @@ def send_post(html_text, image_bytes=None):
 
 def send_media_group(html_text, images_list):
     """Bir nechta suratni (kompaniya binosi, mahsuloti, grafik va h.k.) bitta albom qilib yuboradi."""
+    html_text = _ensure_source_and_footer(html_text)
     if not images_list:
         return send_post(html_text)
     if len(images_list) == 1:
@@ -77,6 +129,21 @@ def send_media_group(html_text, images_list):
     if _visible_len(html_text) > CAPTION_LIMIT:
         send_post(html_text)
     return res
+
+
+def send_poll(question: str, options: list[str], is_anonymous: bool = True):
+    """Telegram kanalga rasmiy interaktiv so'rovnoma (Poll) yuboradi."""
+    import json
+    opts = [{"text": str(o)[:100]} for o in options[:10]]
+    return _api(
+        "sendPoll",
+        data={
+            "chat_id": TELEGRAM_CHANNEL,
+            "question": str(question)[:300],
+            "options": json.dumps(opts),
+            "is_anonymous": is_anonymous,
+        },
+    )
 
 
 def check():

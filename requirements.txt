@@ -4,3 +4,4 @@ python-dotenv>=1.0
 Pillow>=10.0
 trafilatura>=1.8
 truststore>=0.9
+beautifulsoup4>=4.12

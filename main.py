@@ -19,6 +19,7 @@ import education
 import fetcher
 import images
 import market
+import pro_features
 import telegram_api
 from config import (
     CHECK_INTERVAL_MIN,
@@ -318,6 +319,69 @@ def process_scheduled_features():
             if companies.publish_company_spotlight():
                 db.mark_feature_done("company_spotlight_sched", day_key)
 
+    # 7. Haftalik Iqtisodiy Taqvim (dushanba 08:00-11:00 Toshkent vaqti)
+    if weekday == 0 and 8 <= now.hour <= 11:
+        if not db.is_feature_done("econ_calendar", week_key):
+            try:
+                if pro_features.post_economic_calendar():
+                    db.mark_feature_done("econ_calendar", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Iqtisodiy taqvimda xato: %s", e)
+
+    # 8. Haftalik Choraklik Hisobotlar Taqvimı / Earnings (dushanba 11:00-14:00 Toshkent vaqti)
+    if weekday == 0 and 11 <= now.hour <= 14:
+        if not db.is_feature_done("earnings_calendar", week_key):
+            try:
+                if pro_features.post_earnings_calendar():
+                    db.mark_feature_done("earnings_calendar", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Earnings taqvimida xato: %s", e)
+
+    # 9. Pre-Market Brifing (dushanba-juma 17:30-18:30 Toshkent vaqti, AQSh birjasi ochilishidan oldin)
+    if weekday in (0, 1, 2, 3, 4) and (now.hour == 17 and now.minute >= 30 or now.hour == 18 and now.minute <= 30):
+        if not db.is_feature_done("premarket", today_str):
+            try:
+                if pro_features.post_premarket_briefing():
+                    db.mark_feature_done("premarket", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Pre-Market brifingda xato: %s", e)
+
+    # 10. Bozor Kayfiyati: Fear & Greed + VIX (seshanba va juma 11:00-13:00 Toshkent vaqti)
+    if weekday in (1, 4) and 11 <= now.hour <= 13:
+        if not db.is_feature_done("fear_greed", today_str):
+            try:
+                if pro_features.post_fear_and_greed():
+                    db.mark_feature_done("fear_greed", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Fear & Greed postida xato: %s", e)
+
+    # 11. Top 5 Gainers/Losers + Sektor Heatmap (seshanba-shanba 07:30-11:30 Toshkent vaqti)
+    if weekday in (1, 2, 3, 4, 5) and 7 <= now.hour <= 11:
+        if not db.is_feature_done("movers_heatmap", today_str):
+            try:
+                if pro_features.post_top_movers_heatmap():
+                    db.mark_feature_done("movers_heatmap", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Movers & Heatmap postida xato: %s", e)
+
+    # 12. Smart Money: Insayderlar / SEC Form 4 (chorshanba va juma 14:00-16:00 Toshkent vaqti)
+    if weekday in (2, 4) and 14 <= now.hour <= 16:
+        if not db.is_feature_done("smart_money", today_str):
+            try:
+                if pro_features.post_smart_money():
+                    db.mark_feature_done("smart_money", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Smart Money postida xato: %s", e)
+
+    # 13. Interaktiv So'rovnoma / Poll (chorshanba va shanba 19:00-21:00 Toshkent vaqti)
+    if weekday in (2, 5) and 19 <= now.hour <= 21:
+        if not db.is_feature_done("interactive_poll_sched", today_str):
+            try:
+                if pro_features.post_interactive_poll():
+                    db.mark_feature_done("interactive_poll_sched", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Interaktiv so'rovnomada xato: %s", e)
+
 
 def run_once():
     if in_quiet_hours():
@@ -356,6 +420,13 @@ def main():
     p.add_argument("--company", type=str, help="Aniq kompaniya aksiyasini tahlil qilib chiqarish (masalan: NVDA, AAPL, TSLA)")
     p.add_argument("--company-spotlight", action="store_true", help="Navbatdagi yirik kompaniya tahlilini chiqarish")
     p.add_argument("--companies-list", action="store_true", help="Tahlil qilinadigan yirik kompaniyalar ro'yxatini ko'rish")
+    p.add_argument("--econ-calendar", action="store_true", help="Haftalik iqtisodiy taqvimni chiqarish")
+    p.add_argument("--earnings-calendar", action="store_true", help="Haftalik choraklik hisobotlar (Earnings) taqvimini chiqarish")
+    p.add_argument("--premarket", action="store_true", help="Pre-Market brifingni chiqarish")
+    p.add_argument("--fear-greed", action="store_true", help="Fear & Greed Index + VIX spidometrini chiqarish")
+    p.add_argument("--movers-heatmap", action="store_true", help="Top 5 Gainers/Losers + Sektor Heatmap chiqarish")
+    p.add_argument("--smart-money", action="store_true", help="Smart Money (SEC Form 4 insayder xaridlari) chiqarish")
+    p.add_argument("--poll", action="store_true", help="Interaktiv Telegram so'rovnomasi yuborish")
     args = p.parse_args()
     db.init()
 
@@ -406,6 +477,27 @@ def main():
         for idx, c in enumerate(companies.COMPANIES_DB, 1):
             done = "✅" if db.is_feature_done("company_spotlight", c["symbol"]) else "⏳"
             print(f"{idx:2d}. {done} #{c['symbol']:<5} | {c['name']:<25} | {c['market_cap']:<15} | {c['sector']}")
+        return
+    if args.econ_calendar:
+        pro_features.post_economic_calendar()
+        return
+    if args.earnings_calendar:
+        pro_features.post_earnings_calendar()
+        return
+    if args.premarket:
+        pro_features.post_premarket_briefing()
+        return
+    if args.fear_greed:
+        pro_features.post_fear_and_greed()
+        return
+    if args.movers_heatmap:
+        pro_features.post_top_movers_heatmap()
+        return
+    if args.smart_money:
+        pro_features.post_smart_money()
+        return
+    if args.poll:
+        pro_features.post_interactive_poll()
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

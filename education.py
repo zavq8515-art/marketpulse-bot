@@ -182,7 +182,9 @@ def publish_lesson(lesson_id: int = None, dry_run: bool = False) -> bool:
         return True
 
     try:
-        telegram_api.send_post(post["post_html"], img)
+        res = telegram_api.send_post(post["post_html"], img)
+        if isinstance(res, dict) and res.get("message_id"):
+            db.save_academy_link(lesson_id, int(res["message_id"]))
         db.mark_feature_done("academy_lesson", f"lesson_{lesson_id}")
         db.add_post(
             None,
@@ -285,4 +287,71 @@ def post_weekend_announcement(dry_run: bool = False) -> bool:
     telegram_api.send_post(html, img)
     db.add_post(None, f"academy-announce-{datetime.now(TASHKENT).strftime('%Y-W%W')}", f"Weekend Akademiya anonsi (#{start_id}-#{end_id})", "")
     log.info("Juma kechki Akademiya anonsi (#%d-#%d) muvaffaqiyatli chiqarildi!", start_id, end_id)
+    return True
+
+
+def post_academy_archive(dry_run: bool = False) -> bool:
+    """Shu kungacha o'tilgan barcha Akademiya darslarini alohida bosiladigan giperhavolalar bilan
+    bitta tartibli mundarija (kutubxona) posti sifatida kanalga chiqaradi.
+    """
+    last_done = get_next_lesson_id() - 1
+    if last_done < 1:
+        log.info("Hali birorta Akademiya darsi o'tilmagan, arxiv chiqarilmadi.")
+        return False
+
+    links_map = db.get_academy_links()
+    channel_slug = "MarketPulseZK"
+
+    lines = []
+    for lid in range(1, last_done + 1):
+        lesson = get_lesson(lid)
+        title = lesson["title"]
+        msg_id = links_map.get(lid)
+        if msg_id:
+            url = f"https://t.me/{channel_slug}/{msg_id}"
+            lines.append(f'• <a href="{url}"><b>#{lid}-dars:</b> {title}</a>')
+        else:
+            lines.append(f"• <b>#{lid}-dars:</b> {title}")
+
+    # Agar darslar soni 60+ ga yetib matn 3600 belgidan oshsa, qismlarga bo'lib yuboradi
+    chunks = []
+    cur_chunk = []
+    cur_len = 0
+    for line in lines:
+        if cur_len + len(line) + 1 > 3200 and cur_chunk:
+            chunks.append(cur_chunk)
+            cur_chunk = []
+            cur_len = 0
+        cur_chunk.append(line)
+        cur_len += len(line) + 1
+    if cur_chunk:
+        chunks.append(cur_chunk)
+
+    total_parts = len(chunks)
+    for part_idx, chunk_lines in enumerate(chunks, 1):
+        part_suffix = f" ({part_idx}/{total_parts}-qism)" if total_parts > 1 else ""
+        header = (
+            f"📚 <b>MARKETPULSE AKADEMIYA — OLTIN DARSLAR KUTUBXONASI{part_suffix}</b>\n"
+            f"<i>Noldan professional investor va treyderlik sari shu kungacha o‘tilgan barcha darslar (#1–#{last_done}):</i>\n\n"
+            f"👇 <b>Istalgan dars ustiga bosing va to‘g‘ridan-to‘g‘ri o‘qing:</b>\n\n"
+        )
+        body = "\n".join(chunk_lines)
+        closing = (
+            "\n\n💡 <i>Yangi kelgan obunachilar darslarni #1-darsdan boshlab ketma-ket o‘qib chiqishlari mumkin. "
+            "Bilim ulashish — eng yaxshi investitsiya, kanalimizni do‘stlaringizga ham yuboring!</i>\n\n"
+            '<i>Manba: <a href="https://t.me/MarketPulseZK">MarketPulse Akademiya</a></i>'
+        )
+        html = header + body + closing
+
+        if dry_run:
+            print("\n" + "=" * 60)
+            print(f"[DRY RUN - AKADEMIYA ARXIVI {part_idx}/{total_parts}]")
+            print(html)
+            print("=" * 60)
+        else:
+            telegram_api.send_post(html, image_bytes=None)
+
+    if not dry_run:
+        db.add_post(None, f"academy-archive-{datetime.now(TASHKENT).strftime('%Y-W%W')}", f"Akademiya kutubxonasi (#1-#{last_done})", "")
+        log.info("Juma kechki Akademiya darslari kutubxonasi (#1-#%d) muvaffaqiyatli chiqarildi!", last_done)
     return True

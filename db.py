@@ -48,6 +48,11 @@ def init():
                 url TEXT,
                 posted_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS academy_links (
+                lesson_id INTEGER PRIMARY KEY,
+                message_id INTEGER NOT NULL,
+                posted_at TEXT
+            );
             """
         )
 
@@ -174,3 +179,21 @@ def record_used_image(image_hash: str, url: str = ""):
             "INSERT OR REPLACE INTO used_images (image_hash, url, posted_at) VALUES (?,?,?)",
             (image_hash, url or "", now_utc().isoformat()),
         )
+
+
+def save_academy_link(lesson_id: int, message_id: int):
+    """Chiqarilgan Akademiya darsining Telegram message_id sini saqlaydi."""
+    if not lesson_id or not message_id:
+        return
+    with _conn() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO academy_links (lesson_id, message_id, posted_at) VALUES (?,?,?)",
+            (int(lesson_id), int(message_id), now_utc().isoformat()),
+        )
+
+
+def get_academy_links() -> dict[int, int]:
+    """Barcha saqlangan Akademiya darslari {lesson_id: message_id} xaritasini qaytaradi."""
+    with _conn() as c:
+        rows = c.execute("SELECT lesson_id, message_id FROM academy_links ORDER BY lesson_id ASC").fetchall()
+    return {int(r["lesson_id"]): int(r["message_id"]) for r in rows}

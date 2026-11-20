@@ -19,6 +19,7 @@ import education
 import fetcher
 import images
 import market
+import max_features
 import pro_features
 import telegram_api
 from config import (
@@ -382,6 +383,69 @@ def process_scheduled_features():
             except Exception as e:  # noqa: BLE001
                 log.warning("Interaktiv so'rovnomada xato: %s", e)
 
+    # 14. Yirik Fondlar & Insayderlar (SEC 13D/13G + Form 4: dushanba va payshanba 14:00-16:00)
+    if weekday in (0, 3) and 14 <= now.hour <= 16:
+        if not db.is_feature_done("institutional_flows", today_str):
+            try:
+                if max_features.post_institutional_flows():
+                    db.mark_feature_done("institutional_flows", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Yirik fondlar postida xato: %s", e)
+
+    # 15. Unusual Volume Radari (dushanba-juma 21:00-22:30 Toshkent vaqti)
+    if weekday in (0, 1, 2, 3, 4) and 21 <= now.hour <= 22:
+        if not db.is_feature_done("unusual_volume", today_str):
+            try:
+                if max_features.post_unusual_volume():
+                    db.mark_feature_done("unusual_volume", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Unusual Volume radarida xato: %s", e)
+
+    # 16. Real Texnik Tahlil Grafigi (dushanba-juma 15:00-17:00 Toshkent vaqti)
+    if weekday in (0, 1, 2, 3, 4) and 15 <= now.hour <= 17:
+        if not db.is_feature_done("technical_chart_daily", today_str):
+            try:
+                if max_features.post_technical_chart():
+                    db.mark_feature_done("technical_chart_daily", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Texnik tahlil grafigida xato: %s", e)
+
+    # 17. Gigantlar Duelli VS (haftada 1 marta: yakshanba 16:00-19:00 Toshkent vaqti)
+    if weekday == 6 and 16 <= now.hour <= 19:
+        if not db.is_feature_done("giant_duel_sched", week_key):
+            try:
+                if max_features.post_giant_duel():
+                    db.mark_feature_done("giant_duel_sched", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Gigantlar duellida xato: %s", e)
+
+    # 18. Fed Stavka Radari & Yield Curve (haftada 1 marta: chorshanba 10:00-12:00 Toshkent vaqti)
+    if weekday == 2 and 10 <= now.hour <= 12:
+        if not db.is_feature_done("fed_radar_sched", week_key):
+            try:
+                if max_features.post_fed_radar():
+                    db.mark_feature_done("fed_radar_sched", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Fed stavka radarida xato: %s", e)
+
+    # 19. O'zbekiston Moliya Pulsi — USD/UZS & Oltin (dushanba, chorshanba, juma 09:00-11:00)
+    if weekday in (0, 2, 4) and 9 <= now.hour <= 11:
+        if not db.is_feature_done("uzbekistan_pulse", today_str):
+            try:
+                if max_features.post_uzbekistan_pulse():
+                    db.mark_feature_done("uzbekistan_pulse", today_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("O'zbekiston moliya pulsida xato: %s", e)
+
+    # 20. Haftalik 52-Week High/Low Scanner (juma 18:30-20:30 Toshkent vaqti)
+    if weekday == 4 and 18 <= now.hour <= 20:
+        if not db.is_feature_done("scanner_52w_sched", week_key):
+            try:
+                if max_features.post_52w_scanner():
+                    db.mark_feature_done("scanner_52w_sched", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("52W Scanner postida xato: %s", e)
+
 
 def run_once():
     if in_quiet_hours():
@@ -427,6 +491,13 @@ def main():
     p.add_argument("--movers-heatmap", action="store_true", help="Top 5 Gainers/Losers + Sektor Heatmap chiqarish")
     p.add_argument("--smart-money", action="store_true", help="Smart Money (SEC Form 4 insayder xaridlari) chiqarish")
     p.add_argument("--poll", action="store_true", help="Interaktiv Telegram so'rovnomasi yuborish")
+    p.add_argument("--inst-flows", action="store_true", help="Yirik fondlar va insayderlar (SEC 13D/13G + Form 4) chiqarish")
+    p.add_argument("--unusual-volume", action="store_true", help="Unusual Volume radarini chiqarish")
+    p.add_argument("--tech-chart", nargs="?", const="AUTO", help="Texnik tahlil grafigi (masalan: --tech-chart NVDA)")
+    p.add_argument("--duel", action="store_true", help="Gigantlar Duelli (VS infografika) chiqarish")
+    p.add_argument("--fed-radar", action="store_true", help="Fed Stavka Radari va Yield Curve chiqarish")
+    p.add_argument("--uz-pulse", action="store_true", help="O'zbekiston Moliya Pulsi (USD/UZS & Oltin) chiqarish")
+    p.add_argument("--scanner-52w", action="store_true", help="Haftalik 52-Week High/Low Scanner chiqarish")
     args = p.parse_args()
     db.init()
 
@@ -498,6 +569,28 @@ def main():
         return
     if args.poll:
         pro_features.post_interactive_poll()
+        return
+    if args.inst_flows:
+        max_features.post_institutional_flows()
+        return
+    if args.unusual_volume:
+        max_features.post_unusual_volume()
+        return
+    if args.tech_chart:
+        sym = None if args.tech_chart == "AUTO" else args.tech_chart.upper().strip()
+        max_features.post_technical_chart(sym)
+        return
+    if args.duel:
+        max_features.post_giant_duel()
+        return
+    if args.fed_radar:
+        max_features.post_fed_radar()
+        return
+    if args.uz_pulse:
+        max_features.post_uzbekistan_pulse()
+        return
+    if args.scanner_52w:
+        max_features.post_52w_scanner()
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

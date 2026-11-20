@@ -237,3 +237,52 @@ def process_weekend_academy() -> bool:
         db.mark_feature_done("academy_slot", slot_key)
         return True
     return False
+
+
+def post_weekend_announcement(dry_run: bool = False) -> bool:
+    """Har juma kechki vaqtda shanba va yakshanba kuni chiqadigan 6 ta Akademiya darsini anons qiladi."""
+    start_id = get_next_lesson_id()
+    if start_id > 100:
+        log.info("100 ta dars yakunlangan, juma anonsi o'tkazib yuborildi.")
+        return False
+
+    upcoming = [get_lesson(lid) for lid in range(start_id, min(start_id + 6, 101))]
+    if not upcoming:
+        return False
+
+    sat_lessons = upcoming[:3]
+    sun_lessons = upcoming[3:6]
+
+    sat_txt = "\n".join(f"• <b>Dars #{l['id']}:</b> {l['title']}" for l in sat_lessons)
+    sun_txt = "\n".join(f"• <b>Dars #{l['id']}:</b> {l['title']}" for l in sun_lessons) if sun_lessons else ""
+
+    end_id = upcoming[-1]["id"]
+    html = (
+        f"🎓 <b>ERTAGA — MARKETPULSE WEEKEND AKADEMIYA!</b>\n"
+        f"<i>“100 qadamda noldan professional investitsiya va treyding” (#{start_id}–#{end_id}-darslar)</i>\n\n"
+        f"📅 <b>SHANBA DARS JADVALI (10:00 • 14:00 • 18:00):</b>\n"
+        f"{sat_txt}\n\n"
+        + (f"📅 <b>YAKSHANBA DARS JADVALI (10:00 • 14:00 • 18:00):</b>\n{sun_txt}\n\n" if sun_txt else "")
+        + "🤝 <b>Kanalni qo‘llab-quvvatlang:</b> Ushbu bepul va mukammal darslar muntazam davom etishi hamda yanada ko‘proq insonlar moliyaviy savodxonlikka erishishi uchun kanal havolasini yaqinlaringiz va do‘stlaringizga ulashing!\n\n"
+        '<i>Manba: <a href="https://t.me/MarketPulseZK">MarketPulse Akademiya</a></i>'
+    )
+
+    card_points = [f"#{l['id']}: {l['title'][:42]}" for l in upcoming[:3]]
+    img = images.academy_card(
+        lesson_id=start_id,
+        title=f"WEEKEND AKADEMIYA: #{start_id}–#{end_id}-DARSLAR ANONSI",
+        module_name="SHANBA & YAKSHANBA",
+        points=card_points,
+    )
+
+    if dry_run:
+        print("\n" + "=" * 60)
+        print("[DRY RUN - JUMA AKADEMIYA ANONSI]")
+        print(html)
+        print("=" * 60)
+        return True
+
+    telegram_api.send_post(html, img)
+    db.add_post(None, f"academy-announce-{datetime.now(TASHKENT).strftime('%Y-W%W')}", f"Weekend Akademiya anonsi (#{start_id}-#{end_id})", "")
+    log.info("Juma kechki Akademiya anonsi (#%d-#%d) muvaffaqiyatli chiqarildi!", start_id, end_id)
+    return True

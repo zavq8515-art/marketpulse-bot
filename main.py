@@ -446,6 +446,15 @@ def process_scheduled_features():
             except Exception as e:  # noqa: BLE001
                 log.warning("52W Scanner postida xato: %s", e)
 
+    # 21. Juma kechki Weekend Akademiya anonsi (har juma 19:00-23:00 Toshkent vaqti)
+    if weekday == 4 and 19 <= now.hour <= 23:
+        if not db.is_feature_done("academy_friday_announce", week_key):
+            try:
+                if education.post_weekend_announcement():
+                    db.mark_feature_done("academy_friday_announce", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Juma Akademiya anonsida xato: %s", e)
+
 
 def run_once():
     if in_quiet_hours():
@@ -481,6 +490,7 @@ def main():
     p.add_argument("--lesson", type=int, help="Aniq dars ID raqamini chiqarish (1-100)")
     p.add_argument("--next-lesson", action="store_true", help="Navbatdagi akademiya darsini chiqarish")
     p.add_argument("--academy-status", action="store_true", help="Akademiya holatini ko'rish")
+    p.add_argument("--academy-announce", action="store_true", help="Shanba/Yakshanba Akademiya darslari anonsini chiqarish")
     p.add_argument("--company", type=str, help="Aniq kompaniya aksiyasini tahlil qilib chiqarish (masalan: NVDA, AAPL, TSLA)")
     p.add_argument("--company-spotlight", action="store_true", help="Navbatdagi yirik kompaniya tahlilini chiqarish")
     p.add_argument("--companies-list", action="store_true", help="Tahlil qilinadigan yirik kompaniyalar ro'yxatini ko'rish")
@@ -536,6 +546,10 @@ def main():
         print(f"Keyingi navbatdagi dars: #{next_id}")
         print(f"Modul: {l['module']}")
         print(f"Mavzu: {l['title']}")
+        return
+    if args.academy_announce:
+        if education.post_weekend_announcement():
+            db.mark_feature_done("academy_friday_announce", datetime.now(TASHKENT).strftime("%Y-W%W"))
         return
     if args.company:
         companies.publish_company_spotlight(args.company.upper().strip())

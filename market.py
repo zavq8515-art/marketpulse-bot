@@ -16,19 +16,21 @@ log = logging.getLogger("market")
 
 # symbol: (nomi, chegara, turi) — turi "pct" (foiz) yoki "bp" (bazis punkt, yieldlar uchun)
 WATCHLIST = {
-    "^GSPC": ("S&P 500", 1.2, "pct"),
-    "^IXIC": ("Nasdaq Composite", 1.5, "pct"),
-    "^DJI": ("Dow Jones", 1.2, "pct"),
-    "^RUT": ("Russell 2000", 2.0, "pct"),
-    "^VIX": ("VIX (qo‘rquv indeksi)", 15.0, "pct"),
-    "^TNX": ("US 10Y Treasury Yield", 10.0, "bp"),
-    "DX-Y.NYB": ("DXY (dollar indeksi)", 0.8, "pct"),
-    "CL=F": ("WTI neft", 3.0, "pct"),
-    "BZ=F": ("Brent neft", 3.0, "pct"),
-    "GC=F": ("Oltin", 1.8, "pct"),
-    "BTC-USD": ("Bitcoin", 4.0, "pct"),
-    "ETH-USD": ("Ethereum", 5.0, "pct"),
-    "NVDA": ("NVIDIA", 5.0, "pct"),
+    "^GSPC": ("S&P 500", 0.9, "pct"),
+    "^IXIC": ("Nasdaq Composite", 1.1, "pct"),
+    "^DJI": ("Dow Jones", 0.9, "pct"),
+    "^RUT": ("Russell 2000", 1.5, "pct"),
+    "^VIX": ("VIX (qo‘rquv indeksi)", 10.0, "pct"),
+    "^TNX": ("US 10Y Treasury Yield", 8.0, "bp"),
+    "DX-Y.NYB": ("DXY (dollar indeksi)", 0.7, "pct"),
+    "CL=F": ("WTI neft", 2.5, "pct"),
+    "BZ=F": ("Brent neft", 2.5, "pct"),
+    "GC=F": ("Oltin", 1.5, "pct"),
+    "BTC-USD": ("Bitcoin", 3.5, "pct"),
+    "ETH-USD": ("Ethereum", 4.5, "pct"),
+    "NVDA": ("NVIDIA (#NVDA)", 4.0, "pct"),
+    "TSLA": ("Tesla (#TSLA)", 4.5, "pct"),
+    "AAPL": ("Apple (#AAPL)", 3.5, "pct"),
 }
 
 DAILY_INDEX_SYMBOLS = {

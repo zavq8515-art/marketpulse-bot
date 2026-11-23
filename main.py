@@ -173,8 +173,23 @@ def process_news(budget):
     return posted
 
 
+def _collect_live_headlines(limit: int = 25) -> list[str]:
+    """Bozordagi keskin harakat sababini aniqlash uchun eng so'nggi sarlavhalarni yig'adi."""
+    headlines = []
+    try:
+        fresh = fetcher.fetch_new_items()
+        for it in fresh[:15]:
+            headlines.append(f"[{it['source']}] {it['title']}")
+    except Exception:  # noqa: BLE001
+        pass
+    for t in db.recent_titles():
+        if t not in headlines:
+            headlines.append(t)
+    return headlines[:limit]
+
+
 def process_price_moves(budget):
-    """Barcha keskin harakatlarni BITTA postga jamlaydi."""
+    """Real-time keskin harakatlarni ehtimoliy sabablari bilan BITTA tezkor postga jamlaydi."""
     moves = market.check_moves()
     if not moves or budget <= 0:
         return 0
@@ -182,10 +197,11 @@ def process_price_moves(budget):
     def close_levels():
         for a in moves:
             step = 1 if a["level"] > 0 else -1
-            for lvl in range(step, a["level"] + step, step):  # pastroq darajalarni ham yopamiz
+            for lvl in range(step, a["level"] + step, step):
                 db.mark_price_alert(a["symbol"], a["day"], lvl)
 
-    post = ai.write_price_alert(moves, db.recent_titles(), db.recent_posts(12))
+    headlines = _collect_live_headlines(25)
+    post = ai.write_price_alert(moves, headlines, db.recent_posts(12))
     if not post:
         return 0
     if post.get("skip") or not post.get("post_html"):
@@ -193,14 +209,10 @@ def process_price_moves(budget):
         close_levels()
         return 0
     crypto_only = all(a["symbol"] in ("BTC-USD", "ETH-USD") for a in moves)
-    image = images.pick_image(
-        {"image": None},
-        {
-            "photo_query": "New York Stock Exchange trading floor" if not crypto_only else "Data center server room",
-            "card_title": post.get("card_title") or "Bozorda keskin harakat",
-            "card_points": post.get("card_points") or [f"{a['name']}: {a['move_desc']}" for a in moves[:3]],
-            "category": "CRYPTO" if crypto_only else "MARKETS",
-        },
+    image = images.brand_card(
+        post.get("card_title") or "Bozorda keskin harakat",
+        post.get("card_points") or [f"{a['name']}: {a['move_desc']}" for a in moves[:3]],
+        "CRYPTO" if crypto_only else "MARKETS",
     )
     if publish(post["post_html"], image, "price_moves"):
         close_levels()
@@ -208,6 +220,51 @@ def process_price_moves(budget):
         db.add_post(None, topic[:120], post.get("summary_uz", ""), "")
         return 1
     return 0
+
+
+def post_live_market_reaction() -> bool:
+    """Hozirgi real-time bozor reaksiyasini (indekslar, aktivlar va ehtimoliy sabablar) darhol chiqaradi."""
+    log.info("Real-time bozor reaksiyasi tayyorlanmoqda...")
+    indices = market.get_daily_indices()
+    if not indices:
+        return False
+
+    moves = []
+    for idx in indices:
+        moves.append({
+            "name": idx["name"],
+            "price": f"{idx['price']:,.2f}",
+            "move_desc": idx["change"],
+            "pct": idx["change_pct"],
+        })
+
+    # Asosiy yirik aksiyalar ham qo'shiladi
+    for sym, label in (("NVDA", "NVIDIA (#NVDA)"), ("TSLA", "Tesla (#TSLA)"), ("AAPL", "Apple (#AAPL)"), ("AMD", "AMD (#AMD)")):
+        q = pro_features._yahoo_quote_full(sym)
+        if q:
+            moves.append({
+                "name": label,
+                "price": f"${q['price']:,.2f}",
+                "move_desc": f"{q['pct']:+.2f}%",
+                "pct": q["pct"],
+            })
+
+    headlines = _collect_live_headlines(25)
+    post = ai.write_price_alert(moves, headlines, [], force_publish=True)
+    if not post or not post.get("post_html"):
+        return False
+
+    top_pts = post.get("card_points") or [f"{m['name']}: {m['move_desc']}" for m in moves[:3]]
+    img = images.brand_card(
+        post.get("card_title") or "REAL-TIME BOZOR REAKSIYASI",
+        top_pts[:3],
+        "MARKETS",
+    )
+    if publish(post["post_html"], img, "live_market_reaction"):
+        db.add_post(None, f"live-reaction-{datetime.now(TASHKENT).strftime('%Y-%m-%d-%H')}", post.get("summary_uz", "Real-time bozor reaksiyasi"), "")
+        log.info("Real-time bozor reaksiyasi muvaffaqiyatli chiqarildi!")
+        return True
+    return False
 
 
 def post_daily_close():
@@ -476,14 +533,14 @@ def run_once():
     except Exception as e:  # noqa: BLE001
         log.warning("Rejalashtirilgan postlar tekshiruvida xato: %s", e)
 
-    # 2. Yangiliklar va keskin narx harakatlari
+    # 2. Real-time keskin narx harakatlari (ENG YUQORI USTUVORLIK — kutmasdan darhol chiqadi!) va yangiliklar
     budget = min(MAX_POSTS_PER_RUN, MAX_POSTS_PER_DAY - db.posts_today_count(TASHKENT))
     if budget <= 0:
         log.info("Kunlik limit (%d) tugadi", MAX_POSTS_PER_DAY)
         return
-    n = process_news(budget)
-    if budget - n > 0 and gap_ok():
-        n += process_price_moves(budget - n)
+    n = process_price_moves(budget)
+    if budget - n > 0:
+        n += process_news(budget - n)
     log.info("Tekshiruv tugadi. Chiqarilgan postlar: %d", n)
 
 
@@ -518,6 +575,7 @@ def main():
     p.add_argument("--fed-radar", action="store_true", help="Fed Stavka Radari va Yield Curve chiqarish")
     p.add_argument("--uz-pulse", action="store_true", help="O'zbekiston Moliya Pulsi (USD/UZS & Oltin) chiqarish")
     p.add_argument("--scanner-52w", action="store_true", help="Haftalik 52-Week High/Low Scanner chiqarish")
+    p.add_argument("--market-pulse-now", action="store_true", help="Hozirgi real-time bozor reaksiyasini darhol chiqarish")
     args = p.parse_args()
     db.init()
 
@@ -619,6 +677,9 @@ def main():
         return
     if args.scanner_52w:
         max_features.post_52w_scanner()
+        return
+    if args.market_pulse_now:
+        post_live_market_reaction()
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

@@ -354,42 +354,52 @@ def write_post(item, article, related=None):
     return res
 
 
-PRICE_PROMPT = """Sen MARKETPULSE tahlilchisisan. Hozirgi vaqt (Toshkent): {now}. AQSH vaqti: {ny}.
-Quyidagi aktivlar keskin harakat qildi (Yahoo Finance, oldingi yopilishga nisbatan INTRADAY o'zgarish):
+PRICE_PROMPT = """Sen MARKETPULSE real-time bozor tahlilchisisan.
+Hozirgi vaqt (Toshkent, UTC+5): {now}. AQSH (New York) vaqti: {ny}.
+
+Quyidagi indekslar va aktivlar REAL-TIME (INTRADAY) rejimda keskin harakat qilmoqda (oldingi yopilishga nisbatan):
 {moves}
 
-Shu bilan bog'liq bo'lishi mumkin bo'lgan oxirgi sarlavhalar:
+Bozor harakatiga sabab bo'lishi mumkin bo'lgan so'nggi yangilik sarlavhalari:
 {headlines}
 
 Kanalda oxirgi 12 soatda chiqqan postlar:
 {recent}
 
-Agar shu harakatlar kanalda allaqachon yoritilgan bo'lsa va yangi qo'shimcha yo'q bo'lsa: {{"skip": true}} qaytar.
-Aks holda BITTA qisqa Telegram post yoz (o'zbek, lotin, Telegram HTML: <b>, <i>). 800 belgidan oshmasin.
-- Sarlavha: "⚡️ <b>BOZORDA KESKIN HARAKAT</b>" yoki mazmunga mos boshqa qisqa sarlavha.
-- Raqamlarni faqat yuqoridagidan ol, to'qima. INTRADAY ekanini va ma'lumot vaqtini ko'rsat.
-- Sabab sarlavhalarda aniq ko'rinsa ayt, aniq bo'lmasa "aniq sabab hali rasman tasdiqlanmagan" de.
-- "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA (olib tashlangan).
-- Post oxirida albatta: <i>Manba: Yahoo Finance / MarketPulse</i> bo'lsin.
-JSON: {{"skip": false, "post_html": "...", "summary_uz": "...", "card_title": "...", "card_points": ["eng muhim 3 ta harakat, masalan 'S&P 500: +2.3%'"]}}
+QAT'IY QOIDALAR:
+1. Agar aynan shu darajadagi harakat kanalda allaqachon yoritilgan bo'lsa va yangi keskin o'zgarish bo'lmasa: {{"skip": true}} qaytar.
+2. Aks holda BITTA juda kuchli, tezkor va professional Telegram HTML post yoz (o'zbek tilida, lotin yozuvida: <b>, <i>). 850 belgidan oshmasin.
+3. Sarlavha harakat yo'nalishiga mos bo'lsin: masalan ko'tarilishda "🚀 <b>TEZKOR: BOZORDA KESKIN KO‘TARILISH!</b>", tushishda "🔻 <b>TEZKOR: BOZORDA KESKIN PASAYISH!</b>".
+4. Sarlavhadan darhol keyin aniq vaqtni yoz: <i>🕐 {now} (Toshkent vaqti • Real-Time / Intraday)</i>.
+5. Barcha indekslar va aktivlar raqamlarini FAQAT yuqoridagi ro'yxatdan ol, hech qanday raqam to'qima! Harakat ijobiy bo'lsa 🟢, salbiy bo'lsa 🔴 ishlat.
+6. "🔍 <b>Ehtimoliy sabablar:</b>" bo'limini qo'sh: yuqoridagi sarlavhalardan bozor reaksiyasiga sabab bo'layotgan 1–3 ta asosiy omilni "ehtimoliy sabab sifatida..." / "bozor ishtirokchilari ... fonida..." tarzida aniq va ehtiyotkor ko'rsat. Agar aniq yangilik bo'lmasa, "Aniq sabab hali rasman tasdiqlanmagan — texnik tiklanish yoki yirik fondlar qayta balanslashi ehtimoli yuqori" deb yoz.
+7. Kompaniya tilga olinsa #TIKER heshtegini qo'y (#NVDA, #TSLA, #AAPL...).
+8. "Investor uchun ma'nosi" bo'limini UMUMAN YOZMA.
+9. Post oxirida: <i>Manba: <a href="https://finance.yahoo.com/markets/">Yahoo Finance / NYSE Real-Time</a></i> bo'lsin.
+
+JSON: {{"skip": false, "post_html": "...", "summary_uz": "...", "card_title": "...", "card_points": ["eng muhim 3 ta harakat, masalan 'S&P 500: +1.85%'"]}}
 """
 
 
-def write_price_alert(moves, headlines, recent):
+def write_price_alert(moves, headlines, recent, force_publish=False):
     from datetime import datetime
 
     from config import NEW_YORK
 
     prompt = PRICE_PROMPT.format(
-        now=datetime.now(TASHKENT).strftime("%Y-%m-%d %H:%M"),
-        ny=datetime.now(NEW_YORK).strftime("%Y-%m-%d %H:%M %Z"),
+        now=datetime.now(TASHKENT).strftime("%d.%m.%Y | %H:%M"),
+        ny=datetime.now(NEW_YORK).strftime("%H:%M %Z"),
         moves="\n".join(f"- {m['name']}: {m['price']} ({m['move_desc']})" for m in moves),
-        headlines="\n".join(f"- {h}" for h in headlines[:20]) or "(yo'q)",
-        recent="\n".join(f"- {p['summary']}" for p in recent) or "(yo'q)",
+        headlines="\n".join(f"- {h}" for h in headlines[:25]) or "(yo'q)",
+        recent="(majburiy real-time brifing — skip qilma)" if force_publish else ("\n".join(f"- {p['summary']}" for p in recent) or "(yo'q)"),
     )
     res = _call(prompt, temperature=0.3)
     if res and res.get("post_html"):
-        res["post_html"] = clean_post_html(res["post_html"], source_name="Yahoo Finance / MarketPulse")
+        res["post_html"] = clean_post_html(
+            res["post_html"],
+            source_name="Yahoo Finance / NYSE Real-Time",
+            url="https://finance.yahoo.com/markets/",
+        )
     return res
 
 

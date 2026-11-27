@@ -17,6 +17,7 @@ import companies
 import db
 import education
 import fetcher
+import heatmap_pro
 import images
 import market
 import max_features
@@ -521,6 +522,15 @@ def process_scheduled_features():
             except Exception as e:  # noqa: BLE001
                 log.warning("Juma Akademiya arxivida xato: %s", e)
 
+    # 23. Haftalik Premium Stocks Heatmap (shanba 09:00-11:30 Toshkent vaqti — hafta yakunlangach eng qulay vaqt!)
+    if weekday == 5 and 9 <= now.hour <= 11:
+        if not db.is_feature_done("weekly_stocks_heatmap", week_key):
+            try:
+                if heatmap_pro.post_weekly_stocks_heatmap():
+                    db.mark_feature_done("weekly_stocks_heatmap", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Haftalik Stocks Heatmap postida xato: %s", e)
+
 
 def run_once():
     if in_quiet_hours():
@@ -576,6 +586,7 @@ def main():
     p.add_argument("--uz-pulse", action="store_true", help="O'zbekiston Moliya Pulsi (USD/UZS & Oltin) chiqarish")
     p.add_argument("--scanner-52w", action="store_true", help="Haftalik 52-Week High/Low Scanner chiqarish")
     p.add_argument("--market-pulse-now", action="store_true", help="Hozirgi real-time bozor reaksiyasini darhol chiqarish")
+    p.add_argument("--stocks-heatmap", action="store_true", help="Haftalik Premium Stocks Heatmap (Treemap) chiqarish")
     args = p.parse_args()
     db.init()
 
@@ -680,6 +691,9 @@ def main():
         return
     if args.market_pulse_now:
         post_live_market_reaction()
+        return
+    if args.stocks_heatmap:
+        heatmap_pro.post_weekly_stocks_heatmap()
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

@@ -149,6 +149,23 @@ def send_poll(question: str, options: list[str], is_anonymous: bool = True):
     )
 
 
+def pin_message(message_id: int, disable_notification: bool = True) -> bool:
+    """Xabarni kanal tepasiga qadaydi (pinChatMessage)."""
+    try:
+        _api(
+            "pinChatMessage",
+            data={
+                "chat_id": TELEGRAM_CHANNEL,
+                "message_id": int(message_id),
+                "disable_notification": disable_notification,
+            },
+        )
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("Xabarni pin qilib bo'lmadi (msg_id=%s): %s", message_id, e)
+        return False
+
+
 def check():
     """Token va kanal huquqlarini tekshiradi."""
     me = _api("getMe")

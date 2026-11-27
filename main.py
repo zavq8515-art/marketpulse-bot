@@ -16,6 +16,7 @@ import ai
 import companies
 import db
 import education
+import elite_features
 import fetcher
 import heatmap_pro
 import images
@@ -531,6 +532,32 @@ def process_scheduled_features():
             except Exception as e:  # noqa: BLE001
                 log.warning("Haftalik Stocks Heatmap postida xato: %s", e)
 
+    # 24. Tezkor Earnings Natijalari — BEAT/MISS (seshanba-shanba 08:00-13:00 va 19:00-22:00 Toshkent vaqti)
+    if weekday in (1, 2, 3, 4, 5) and (8 <= now.hour <= 13 or 19 <= now.hour <= 22):
+        try:
+            elite_features.post_earnings_results()
+        except Exception as e:  # noqa: BLE001
+            log.warning("Earnings natijalari tekshiruvida xato: %s", e)
+
+    # 25. Oylik Katta Bozor Sarhisobi (har oyning oxirgi kuni 18:00-22:00 Toshkent vaqti)
+    if elite_features.is_last_day_of_month(now) and 18 <= now.hour <= 22:
+        month_key = now.strftime("%Y-%m")
+        if not db.is_feature_done("monthly_review_sched", month_key):
+            try:
+                if elite_features.post_monthly_review():
+                    db.mark_feature_done("monthly_review_sched", month_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Oylik sarhisob postida xato: %s", e)
+
+    # 26. Bozor Korrelyatsiyasi va Anomaliya Radari (haftada 1 marta: payshanba 12:00-15:00 Toshkent vaqti)
+    if weekday == 3 and 12 <= now.hour <= 15:
+        if not db.is_feature_done("correlation_radar_sched", week_key):
+            try:
+                if elite_features.post_correlation_radar():
+                    db.mark_feature_done("correlation_radar_sched", week_key)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Korrelyatsiya radarida xato: %s", e)
+
 
 def run_once():
     if in_quiet_hours():
@@ -587,6 +614,10 @@ def main():
     p.add_argument("--scanner-52w", action="store_true", help="Haftalik 52-Week High/Low Scanner chiqarish")
     p.add_argument("--market-pulse-now", action="store_true", help="Hozirgi real-time bozor reaksiyasini darhol chiqarish")
     p.add_argument("--stocks-heatmap", action="store_true", help="Haftalik Premium Stocks Heatmap (Treemap) chiqarish")
+    p.add_argument("--earnings-results", action="store_true", help="Yangi Earnings BEAT/MISS natijalarini chiqarish")
+    p.add_argument("--monthly-review", action="store_true", help="Oylik katta bozor sarhisobini chiqarish")
+    p.add_argument("--pin-nav", action="store_true", help="Kanal navigatsiya postini chiqarib tepaga qadash (Pin)")
+    p.add_argument("--correlation-radar", action="store_true", help="Bozor korrelyatsiyasi va anomaliya radarini chiqarish")
     args = p.parse_args()
     db.init()
 
@@ -694,6 +725,18 @@ def main():
         return
     if args.stocks_heatmap:
         heatmap_pro.post_weekly_stocks_heatmap()
+        return
+    if args.earnings_results:
+        elite_features.post_earnings_results()
+        return
+    if args.monthly_review:
+        elite_features.post_monthly_review()
+        return
+    if args.pin_nav:
+        elite_features.post_channel_navigation(pin=True)
+        return
+    if args.correlation_radar:
+        elite_features.post_correlation_radar()
         return
 
     missing = [n for n, v in (("GEMINI_API_KEY", GEMINI_API_KEY), ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)) if not v]

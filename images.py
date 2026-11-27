@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 import db
 from config import ASSETS_DIR, TASHKENT, USER_AGENT
+from uz_alphabet import to_new_uzbek
 
 log = logging.getLogger("images")
 
@@ -237,6 +238,8 @@ def _wiki_photo_url(query: str):
 
 
 def brand_card(title, points=None, category="MARKETS"):
+    title = to_new_uzbek(str(title))
+    points = [to_new_uzbek(str(p)) for p in (points or [])]
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
     for y in range(H):
@@ -331,6 +334,9 @@ GOLD_TEXT = (255, 215, 80)
 
 def academy_card(lesson_id: int, title: str, module_name: str = "", points: list = None):
     """Akademiya darslari uchun maxsus brend karta (gold/navy/cyan dizayn)."""
+    title = to_new_uzbek(str(title))
+    module_name = to_new_uzbek(str(module_name))
+    points = [to_new_uzbek(str(p)) for p in (points or [])]
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
     for y in range(H):

@@ -13,6 +13,7 @@ import time
 import requests
 
 from config import GEMINI_API_KEY, GEMINI_MODEL, TASHKENT
+from uz_alphabet import to_new_uzbek
 
 log = logging.getLogger("ai")
 API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -271,7 +272,7 @@ def clean_post_html(html: str, source_name: str = "", url: str = "") -> str:
         elif url:
             html += f'\n\n<i>Manba: <a href="{url}">{url}</a></i>'
 
-    return html.strip()
+    return to_new_uzbek(html.strip())
 
 
 WRITER_PROMPT = """Sen MARKETPULSE — o'zbek tilidagi professional moliyaviy Telegram kanal tahlilchisisan.
@@ -281,7 +282,9 @@ Hozirgi vaqt (Toshkent, UTC+5): {now}. AQSH (New York) vaqti: {ny}.
 QUYIDAGI MAQOLA ASOSIDA BITTA TELEGRAM POST YOZ.
 
 QAT'IY QOIDALAR:
-- Faqat o'zbek tilida, LOTIN yozuvida (o' g' sh ch harflari to'g'ri: o‘, g‘).
+- FAQAT YANGI ÖZBEK LOTIN ALIFBOSIDA va 100% IMLOVIY XATOLARSIZ yoz:
+  * O‘/o‘ örniga Ö/ö, G‘/g‘ örniga Ğ/ğ, Sh/sh örniga Ş/ş, Ch/ch örniga Ç/ç harflaridan foydalan!
+  * Imloviy xatolar, qöşib yozib qöyiş, rusça kalkalar va noaniq jumlalarga UMUMAN YÖL QÖYMA!
 - HECH QANDAY raqam, narx, foiz yoki faktni to'qib chiqarma. Faqat maqolada bor ma'lumotni ishlat.
   Maqolada raqam bo'lmasa, raqam yozma.
 - Agar biror kompaniya yoki aksiya tilga olinsa, ALBATTA uning birja tikerini heshteg formatida ko'rsat (masalan: #TSLA, #AAPL, #NVDA, #MSFT, #AMZN, #GOOGL). Sarlavhada yoki post matnida tiker heshtegi bo'lsin.

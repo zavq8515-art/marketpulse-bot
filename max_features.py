@@ -27,6 +27,7 @@ import db
 import images
 import telegram_api
 from config import TASHKENT, USER_AGENT
+from uz_alphabet import to_new_uzbek
 
 log = logging.getLogger("max_features")
 
@@ -79,6 +80,8 @@ SEC_HEADERS = {"User-Agent": "MarketPulseResearch contact@marketpulse.uz"}
 # ==============================================================================
 
 def _new_canvas(badge_text: str, title_text: str, accent_color=CYAN):
+    badge_text = to_new_uzbek(badge_text)
+    title_text = to_new_uzbek(title_text)
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
     for y in range(H):

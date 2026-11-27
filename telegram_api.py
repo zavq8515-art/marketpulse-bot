@@ -5,6 +5,7 @@ import re
 import requests
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL
+from uz_alphabet import to_new_uzbek
 
 log = logging.getLogger("telegram")
 API = "https://api.telegram.org/bot{token}/{method}"
@@ -58,7 +59,8 @@ def _ensure_source_and_footer(html_text: str) -> str:
     if "t.me/marketpulsezk" not in text.lower() and "@marketpulsezk" not in text.lower():
         text += f"\n\n{CHANNEL_FOOTER}"
 
-    return text.strip()
+    # 3. 100% Yangi O'zbek Alifbosi (Ö ö, Ğ ğ, Ş ş, Ç ç) va imlo nazorati
+    return to_new_uzbek(text.strip())
 
 
 def _api(method, **kwargs):
@@ -132,14 +134,15 @@ def send_media_group(html_text, images_list):
 
 
 def send_poll(question: str, options: list[str], is_anonymous: bool = True):
-    """Telegram kanalga rasmiy interaktiv so'rovnoma (Poll) yuboradi."""
+    """Telegram kanalga rasmiy interaktiv so'rovnoma (Poll) yuboradi (Yangi alifboda)."""
     import json
-    opts = [{"text": str(o)[:100]} for o in options[:10]]
+    q_new = to_new_uzbek(str(question))[:300]
+    opts = [{"text": to_new_uzbek(str(o))[:100]} for o in options[:10]]
     return _api(
         "sendPoll",
         data={
             "chat_id": TELEGRAM_CHANNEL,
-            "question": str(question)[:300],
+            "question": q_new,
             "options": json.dumps(opts),
             "is_anonymous": is_anonymous,
         },

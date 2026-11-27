@@ -24,6 +24,7 @@ import images
 import market
 import telegram_api
 from config import TASHKENT, USER_AGENT
+from uz_alphabet import to_new_uzbek
 
 log = logging.getLogger("pro_features")
 
@@ -65,6 +66,8 @@ UZ_DAYS = {
 # ==============================================================================
 
 def _new_canvas(badge_text: str, title_text: str, accent_color=CYAN):
+    badge_text = to_new_uzbek(badge_text)
+    title_text = to_new_uzbek(title_text)
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
     for y in range(H):
